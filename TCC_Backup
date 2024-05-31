@@ -1,0 +1,402 @@
+import matplotlib.pyplot as plt
+import numpy as np
+import floris.tools.visualization as wakeviz
+from floris.tools import FlorisInterface, WindRose
+from windrose import WindroseAxes
+from floris.tools.layout_functions import visualize_layout
+import csv
+from datetime import datetime
+import time
+
+# Registre o tempo de início
+start_time = time.time()
+ang_inferior=-31
+ang_superior=30
+
+fi = FlorisInterface("inputs/gch.yaml") # Criando a Interface Floris com valores iniciais importados do arquivo gch.yaml
+farm_powers = None
+
+# Read in the wind rose using the class
+wind_rose = WindRose()
+
+
+#Variavel para plotagens: True = Plotar ::: False = Não plotar
+plot_vv=True
+plot_visualization=True
+plot_potencia=True
+plot_windrose=True
+
+
+## ================================== Subrotina de calculo de produção total do parque =====================================
+
+def calculo_producao_total(num_turbinas, vet_yaw, wind_speeds, wind_directions, fi):
+    global farm_powers
+    farm_powers = np.zeros(len(wind_directions))  # Inicializa um array para armazenar as potências
+    
+    for i, (ws, wd) in enumerate(zip(wind_speeds, wind_directions)):
+        fi.reinitialize(wind_speeds=[ws], wind_directions=[wd])  # Passando a velocidade e direção do vento atual para o FlorisInterface
+        
+        # Configurando os ângulos de inclinação para todas as turbinas
+        for j in range(num_turbinas):
+            yaw_angles[0,0,j] = vet_yaw[i,j]
+            
+        fi.calculate_wake(yaw_angles=yaw_angles)
+        farm_power = fi.get_farm_power()
+        farm_powers[i] = np.squeeze(farm_power) / 1e3  # Convertendo para kW e salvando o valor na posição atual de farm_powers
+
+    producao_total = np.sum(farm_powers)
+    return producao_total
+
+
+## ============================================ =============================================================================
+
+
+## =================================== Subrotina de calculo MPPT do ângulo individual ======================================
+
+def calculo_opt_yaw(yaw_angles, vet_yaw, fi, j, i):
+    melhor_angulo = 0
+    melhor_potencia = 0
+    
+    for angulo in range(ang_inferior, ang_superior):
+        yaw_angles[0, 0, j] = angulo  # Corrigindo a forma de acesso aos valores de yaw_angles
+        fi.calculate_wake(yaw_angles=yaw_angles)
+        farm_power = fi.get_farm_power()  # Obtém a potência para o ângulo atual
+        
+        # Verifica se a potência atual é maior que a melhor potência até agora
+        if farm_power > melhor_potencia:
+            melhor_potencia = farm_power
+            melhor_angulo = angulo
+            
+        vet_yaw[i, j] = melhor_angulo  # Atualiza o vetor de yaw com o melhor ângulo encontrado
+      
+## =========================================================================================================================
+
+
+## ================================== Subrotina de calculo de produção total do parque =====================================
+
+def otimizar_parque(num_turbinas, vet_yaw, wind_speeds, wind_directions, fi, potencia_parque):
+    producao_total_atual = calculo_producao_total(num_turbinas, vet_yaw, wind_speeds, wind_directions, fi)
+    producao_total_anterior = 0
+    ang_medio=int((ang_superior + ang_inferior) / 2)
+    
+    melhor_angulo = 0
+    melhor_potencia = producao_total_atual
+    
+    for i, (ws, wd) in enumerate(zip(wind_speeds, wind_directions)):
+        fi.reinitialize(wind_speeds=[ws], wind_directions=[wd])  # Passando a velocidade e direção do vento atual para o FlorisInterface
+        #print("\n ======== Vento(",wind_speeds[i],wind_directions[i],")")
+        for j in range(num_turbinas):
+            producao_total_atual = 0  # Reseta a produção atual para o loop atual
+            angulo_aux=vet_yaw[i,j] # Armazena o valor do vet_yaw para caso o valor da potencia gerada atual seja a maior possivel, caso contrario este valor se perderia
+            #============================================================================================
+            # MAPEANDO MELHOR INTERVALO DE PROCURA DO ANGULO OTIMIZADO REDUZINDO O TEMPO DE SIMULAÇÃO
+            
+            # Intervalo inferior: Angulo Inferior até Angulo Médio
+            yaw_angles[0, 0, j] = ang_inferior  # yaw_angles calculo inferior
+            vet_yaw[i,j]=ang_inferior
+            fi.calculate_wake(yaw_angles=yaw_angles)
+            producao_inferior = calculo_producao_total(num_turbinas, vet_yaw, wind_speeds, wind_directions, fi)
+            #print("Producao Inferior:", producao_inferior)
+            
+            # Intervalo médio: Angulo Inferior/2 até Angulo Superior/2
+            yaw_angles[0, 0, j] = ang_medio   # yaw_angles calculo do ponto medio
+            angulo_aux=vet_yaw[i,j]
+            vet_yaw[i,j]=ang_medio
+            fi.calculate_wake(yaw_angles=yaw_angles)
+            producao_mediano = calculo_producao_total(num_turbinas, vet_yaw, wind_speeds, wind_directions, fi)
+            #print("Producao Medio:", producao_mediano)
+            
+            # Intervalo superior: Angulo Médio até Angulo Superior   
+            yaw_angles[0, 0, j] = ang_superior  # yaw_angles calculo superior
+            angulo_aux=vet_yaw[i,j]
+            vet_yaw[i,j]=ang_superior
+            fi.calculate_wake(yaw_angles=yaw_angles)
+            producao_superior = calculo_producao_total(num_turbinas, vet_yaw, wind_speeds, wind_directions, fi)
+            #print("Producao Superior:", producao_superior)
+            
+            
+            vet_yaw[i,j]=0 # Reseta o valor de vet_yaw armazenado
+            
+            #=============================================================================================
+            
+            if(producao_mediano==producao_inferior and producao_mediano==producao_superior): #Se a potencia dos pontos inferior, superior e médio forem iguais, entao calcula para o medio
+                angulo=0
+                yaw_angles[0, 0, j] = angulo  
+                angulo_aux=vet_yaw[i,j]
+                vet_yaw[i,j]=angulo
+                fi.calculate_wake(yaw_angles=yaw_angles)
+                producao_total_anterior = producao_total_atual
+                producao_total_atual = calculo_producao_total(num_turbinas, vet_yaw, wind_speeds, wind_directions, fi)
+                #print("Turbina:", j+1, "- Comparando se o valor do angulo ", angulo, ":", producao_total_atual, "eh maior do que o antigo ", melhor_potencia)
+                #print("Producao anterior: ", producao_total_anterior, "Producao atual: ", producao_total_atual)
+                potencia_parque[i,j]=producao_total_atual
+            # Verifica se a potência atual é maior que a melhor potência até agora
+                if producao_total_atual > melhor_potencia:
+                    melhor_potencia = producao_total_atual
+                    #print("Vet_Yaw[",i,",",j,"] setado com o valor do angulo: ",angulo)
+                    melhor_angulo = angulo
+                    vet_yaw[i, j] = melhor_angulo  # Atualiza o vetor de yaw com o melhor ângulo encontrado
+                    potencia_parque[i,j]=melhor_potencia
+                else: vet_yaw[i,j]=angulo_aux
+                if(producao_total_atual<=producao_total_anterior):break   
+                
+            
+         
+            if(producao_inferior<=producao_mediano and producao_mediano>=producao_superior):  # Seta intervalo medio
+                ang_loop_inf=int(ang_inferior/2)
+                ang_loop_sup=int(ang_superior/2)
+                               
+                    
+            if(producao_inferior>producao_mediano and producao_inferior>producao_superior): # Seta intervalo inferior
+                ang_loop_inf=ang_inferior
+                ang_loop_sup=ang_medio
+                    
+        
+            if(producao_superior>producao_mediano and producao_inferior<producao_superior): # Seta intervalo superior
+                ang_loop_inf=ang_medio
+                ang_loop_sup=ang_superior
+      
+                    
+            for angulo in range(ang_loop_inf, ang_loop_sup):
+                yaw_angles[0, 0, j] = angulo
+                angulo_aux=vet_yaw[i,j]
+                vet_yaw[i,j]=angulo
+                fi.calculate_wake(yaw_angles=yaw_angles)
+                producao_total_anterior = producao_total_atual
+                producao_total_atual = calculo_producao_total(num_turbinas, vet_yaw, wind_speeds, wind_directions, fi)
+                #print("Turbina:", j+1, "- Comparando se o valor do angulo ", angulo, ":", producao_total_atual, "eh maior do que o antigo ", melhor_potencia)
+                #print("Producao anterior: ", producao_total_anterior, "Producao atual: ", producao_total_atual)
+                potencia_parque[i,j]=producao_total_atual
+            # Verifica se a potência atual é maior que a melhor potência até agora
+                if producao_total_atual > melhor_potencia:
+                    melhor_potencia = producao_total_atual
+                    melhor_angulo = angulo
+                    #print("Vet_Yaw[",i,",",j,"] setado com o valor do angulo: ",angulo)
+                    vet_yaw[i, j] = melhor_angulo  # Atualiza o vetor de yaw com o melhor ângulo encontrado
+                    potencia_parque[i,j]=melhor_potencia
+                else: vet_yaw[i,j]=angulo_aux
+                if(producao_total_atual<=producao_total_anterior):
+                    break   
+            
+            
+
+    return melhor_potencia
+
+## =========================================================================================================================
+
+
+## ======================================== IMPRIME RESULTADOS ===================================================
+
+def imprime_resultados(num_turbinas, vet_yaw, wind_speeds, wind_directions, fi, potencia_parque):
+    print("")
+    # Cabeçalho
+    cabeçalho = "| {:<19} |".format("DATA - HORA") + " {:<15} |".format("VENTO")
+    for i in range(1, len(turbine_name) + 1):   # Printa no cabeçalho as colunas de todas as turbinas
+        cabeçalho += " {:<6} |".format(f"T{i}")
+    print(cabeçalho)
+
+    # Resultados
+    for i in range(len(wind_speeds)):
+        row = "| {:<19} |".format(f"{data[i]} - {hora_formatada[i]}") + " {:<15} |".format(f"{wind_speeds[i]}m/s / {wind_directions[i]}°")
+
+        for yaw in vet_yaw[i]:
+            row += " {:<6} |".format(f"{yaw}°")
+        print(row)
+    print("")
+
+## =========================================================================================================================
+
+## ======================================== LEITURA DOS DADOS DE ENTRADA ===================================================
+
+# Nome do arquivo de texto
+arquivo1 = 'Dados_2023.CSV'
+arquivo2 = 'Dados_2023_Small.CSV'
+arquivo3 = 'Teste_Dados_Reduced.CSV'
+
+# Listas para armazenar os valores das colunas
+data = []
+hora = []
+wind_speeds = []
+wind_directions = []
+wmax = []
+
+# Abra o arquivo e leia as colunas desejadas
+with open(arquivo3, 'r', encoding='utf-8') as arquivo:
+    leitor_csv = csv.reader(arquivo, delimiter=';')
+    for linha in leitor_csv:
+        # Se houver pelo menos cinco colunas na linha
+        if len(linha) >= 5:
+            # Adicione os valores da quarta e da quinta colunas aos vetores
+            data.append((linha[0]))  # Data
+            hora.append((linha[1]))  # Hora
+            wind_speeds.append(float(linha[18]))  # Vento
+            wind_directions.append(float(linha[16])) # Direção em graus
+            wmax.append((linha[17])) # Velocidade média do vento
+
+#print(wind_directions)
+# Converter para o formato de data e hora
+x_values = np.arange(len(data)) # Cria o vetor do eixo x com os dados das datas
+hora_sem_utc = [h.replace(' UTC', '') for h in hora]
+hora_formatada = [h.zfill(4)[:2] + ':' + h.zfill(4)[2:] for h in hora_sem_utc]  # Coloca a hora no formato HH:MM
+datas_horas = [datetime.strptime(data[i] + " " + h, "%Y/%m/%d %H:%M") for i, h in enumerate(hora_formatada)] # Adiciona a data com a hora
+
+# Plotando a velocidade do vento x data
+if(plot_vv==True):
+    fig, ax = plt.subplots()
+    ax.plot(datas_horas, wind_speeds, marker='o', linestyle='-', label='Velocidade do vento (m/s)')
+    ax.plot(datas_horas, wind_directions, marker='o', linestyle='-', label='Direção do vento (°)')
+    ax.grid(True)
+    ax.legend()
+    ax.set_xlabel('Direção do vento (graus)')
+    ax.set_ylabel('Potência (kW)')
+
+
+# Plotando a rosa do vento
+if(plot_windrose==True):
+    fig = plt.figure(figsize=(8, 8))
+    ax = WindroseAxes.from_ax(fig=fig)
+    ax.bar(wind_directions, wind_speeds, normed=True, opening=0.8, edgecolor='white')
+
+    # Adicionar rótulos e título
+    ax.set_legend()  # Chama set_legend sem argumentos
+    plt.legend(title='Velocidade do vento (m/s)')
+    plt.title('Rosa dos Ventos de Probabilidade')
+## ================================================================================================================
+
+
+## ============================================ PARÂMETROS DE SIMULAÇÃO ===========================================
+
+fi.reinitialize(layout_x=[0, 0, 0, 500, 500, 500, 1000, 1000, 1000], layout_y=[50., 220., 440., 50., 220., 440., 50., 220., 440.])  # Layout do parque
+turbine_name = []  # Lista para armazenar os nomes das turbinas
+
+for i in range(len(fi.layout_x)):       # Laço para nomear as turbinas no formato 'T01' usando o length do layout
+    turbine_name.append('T{:02d}'.format(i+1))
+    
+D = 126.0 # Diâmetro do rotor NREL 5 MW
+fi.reinitialize(wind_directions=wind_directions)
+num_wd = len(wind_directions)  # Quantidade de posições do vetor: Wind Directions
+num_ws = len(wind_speeds)  # Quantidade de posições do vetor: Wind 
+num_turbine = len(fi.layout_x)  # Quantidade de turbinas no parque eólico
+yaw_angles = np.zeros((1, 1, num_turbine))
+num_yaw = len(yaw_angles)
+vet_yaw_opt = np.zeros((num_ws,num_turbine))
+
+
+## ========================================= LAYOUT DO PARQUE ====================================================
+
+# Visualização do parque
+if(plot_visualization==True):
+    ax2=visualize_layout(
+        fi,
+        show_wake_lines=False,
+        lim_lines_per_turbine=2,
+        plot_rotor=True,
+        black_and_white=True,
+        turbine_names=turbine_name
+    )
+
+## ===============================================================================================================
+
+
+
+## ===================================== SIMULANDO A POTÊNCIA DO PARQUE ==========================================
+
+## PRODUÇÃO NOMINAL DO PARQUE
+farm_powers_nom = np.zeros(len(wind_directions))  # Inicializa um array para armazenar as potências
+vet_yaw_nom = np.zeros((num_ws,num_turbine))
+producao_total_nom = calculo_producao_total(num_turbine, vet_yaw_nom, wind_speeds, wind_directions, fi)
+farm_powers_nom = farm_powers
+
+## PRODUÇÃO OTIMIZADA INDIVIDUALMENTE DAS TURBINAS NO PARQUE
+producao_total_opt=0 # Inicializando a potência otimizada somada do parque com valor zerado
+farm_powers_opt = np.zeros(len(wind_directions))  # Inicializa um array para armazenar as potências otimizadas
+vet_yaw_opt = np.zeros((num_ws,num_turbine))
+
+
+potencia_parque = np.zeros((num_wd, num_turbine))
+parque_opt=0
+parque_opt=otimizar_parque(num_turbine, vet_yaw_nom, wind_speeds, wind_directions, fi, potencia_parque)
+potencia_parque_somada= np.sum(potencia_parque, axis=1) # Soma da produção das turbinas no mesmo instante de tempo
+farm_powers_opt=farm_powers
+
+
+## ==============================================================================================================
+
+#print(vet_yaw_nom)
+print("Produção total nominal: ", "{:.2f}".format(producao_total_nom),"kW")
+print("Produção total otimizada ao parque: ", parque_opt,"kW")
+
+
+saldo2=parque_opt-producao_total_nom
+print("Saldo da otimização parque: ", "{:.2f}".format(saldo2),"kW")
+print("Saldo percentual: +", "{:.2f}".format(saldo2*100/producao_total_nom),"%")
+
+imprime_resultados(num_turbine, vet_yaw_nom, wind_speeds, wind_directions, fi, potencia_parque)
+
+## Plotando resultados da potência
+if(plot_potencia==True):
+    fig, ax = plt.subplots()
+    ax.plot(datas_horas, farm_powers_opt, color='r', label='Potência Otimizada do parque eólico')
+    ax.plot(datas_horas, farm_powers_nom, color='k', label='Potência Nominal do parque eólico') 
+    ax.grid(True)
+    ax.legend()
+    ax.set_xlabel('Direção do vento (graus)')
+    ax.set_ylabel('Potência (kW)')
+
+## ==============================================================================================================
+
+
+horizontal_plane = fi.calculate_horizontal_plane(
+    x_resolution=200,
+    y_resolution=100,
+    height=90.0,
+    yaw_angles=np.array([[[0.,0.,0.,0.,0.,0.,0.,0.,0.]]]),
+)
+
+y_plane = fi.calculate_y_plane(
+    x_resolution=200,
+    z_resolution=100,
+    crossstream_dist=0.0,
+    yaw_angles=np.array([[[0.,0.,0.,0.,0.,0.,0.,0.,0.]]]),
+)
+cross_plane = fi.calculate_cross_plane(
+    y_resolution=100,
+    z_resolution=100,
+    downstream_dist=630.0,
+    yaw_angles=np.array([[[0.,0.,0.,0.,0.,0.,0.,0.,0.]]]),
+)
+
+# Create the plots
+fig, ax_list = plt.subplots(3, 1, figsize=(10, 8))
+ax_list = ax_list.flatten()
+wakeviz.visualize_cut_plane(
+    horizontal_plane,
+    ax=ax_list[0],
+    label_contours=True,
+    title="Horizontal"
+)
+wakeviz.visualize_cut_plane(
+    y_plane,
+    ax=ax_list[1],
+    label_contours=True,
+    title="Streamwise profile"
+)
+wakeviz.visualize_cut_plane(
+    cross_plane,
+    ax=ax_list[2],
+    label_contours=True,
+    title="Spanwise profile"
+)
+
+
+# Registre o tempo de término
+end_time = time.time()
+
+# Calcule o tempo decorrido
+elapsed_time = end_time - start_time
+
+print(f"Tempo de simulação decorrido: {elapsed_time} segundos")
+
+
+wakeviz.show_plots()
+plt.show()
