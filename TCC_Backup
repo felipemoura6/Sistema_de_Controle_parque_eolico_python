@@ -8,6 +8,12 @@ import csv
 from datetime import datetime
 import time
 
+from pymoo.core.problem import Problem
+from pymoo.algorithms.soo.nonconvex.ga import GA
+from pymoo.optimize import minimize
+from pymoo.termination import get_termination
+from pymoo.termination.default import DefaultMultiObjectiveTermination
+
 # Registre o tempo de início
 start_time = time.time()
 ang_inferior=-31
@@ -21,10 +27,10 @@ wind_rose = WindRose()
 
 
 #Variavel para plotagens: True = Plotar ::: False = Não plotar
-plot_vv=True
-plot_visualization=True
-plot_potencia=True
-plot_windrose=True
+plot_vv=False
+plot_visualization=False
+plot_potencia=False
+plot_windrose=False
 
 
 ## ================================== Subrotina de calculo de produção total do parque =====================================
@@ -179,7 +185,6 @@ def otimizar_parque(num_turbinas, vet_yaw, wind_speeds, wind_directions, fi, pot
                     break   
             
             
-
     return melhor_potencia
 
 ## =========================================================================================================================
@@ -267,6 +272,7 @@ if(plot_windrose==True):
 ## ============================================ PARÂMETROS DE SIMULAÇÃO ===========================================
 
 fi.reinitialize(layout_x=[0, 0, 0, 500, 500, 500, 1000, 1000, 1000], layout_y=[50., 220., 440., 50., 220., 440., 50., 220., 440.])  # Layout do parque
+#fi.reinitialize(layout_x=[0, 500, 1000], layout_y=[50., 50., 50.])  # Layout do parque
 turbine_name = []  # Lista para armazenar os nomes das turbinas
 
 for i in range(len(fi.layout_x)):       # Laço para nomear as turbinas no formato 'T01' usando o length do layout
@@ -312,10 +318,13 @@ producao_total_opt=0 # Inicializando a potência otimizada somada do parque com 
 farm_powers_opt = np.zeros(len(wind_directions))  # Inicializa um array para armazenar as potências otimizadas
 vet_yaw_opt = np.zeros((num_ws,num_turbine))
 
-
+start_time_meucodigo = time.time()
 potencia_parque = np.zeros((num_wd, num_turbine))
 parque_opt=0
 parque_opt=otimizar_parque(num_turbine, vet_yaw_nom, wind_speeds, wind_directions, fi, potencia_parque)
+end_time_meucodigo = time.time()
+meucodigo_time=end_time_meucodigo-start_time_meucodigo
+
 potencia_parque_somada= np.sum(potencia_parque, axis=1) # Soma da produção das turbinas no mesmo instante de tempo
 farm_powers_opt=farm_powers
 
@@ -387,6 +396,155 @@ wakeviz.visualize_cut_plane(
     label_contours=True,
     title="Spanwise profile"
 )
+
+
+# ===============================================================================================================
+# ===============================================================================================================
+start_time_GA = time.time()
+class WindFarmOptimization(Problem):
+    
+    def __init__(self, floris_interface, n_turbines, wind_speeds, wind_directions, yaw_nom):
+        self.floris_interface = floris_interface
+        self.wind_speeds = np.atleast_1d(wind_speeds)
+        self.wind_directions = np.atleast_1d(wind_directions)
+        self.yaw_nom = yaw_nom
+        self.n_turbines = n_turbines
+        xl = np.ones(n_turbines)*-30
+        xu = np.ones(n_turbines)*30
+        super().__init__(n_var=n_turbines, n_obj=1, n_constr=0, xl=xl, xu=xu)
+
+    def _evaluate(self, x, out, *args, **kwargs):
+        # Inicializa a lista de produções de energia
+        power_list = []
+        
+        # Para cada conjunto de ângulos de yaw na população x
+        for individual in x:
+            # Configurar os ângulos de yaw
+            yaw_angles = np.copy(self.yaw_nom)  # Copia yaw nominal
+            # Atualiza os ângulos de yaw com os valores atuais do indivíduo
+            yaw_angles[:, :len(individual)] = individual.reshape(1, -1)
+            
+            
+            # Recalcular o wake com as novas condições de vento e yaw angles
+            self.floris_interface.reinitialize(wind_speeds=self.wind_speeds, wind_directions=self.wind_directions)
+            self.floris_interface.calculate_wake(yaw_angles=yaw_angles)
+            
+            # Obter a produção de energia do parque eólico
+            power = self.floris_interface.get_farm_power()/1e3
+            
+            # Adiciona a produção de energia na lista
+            power_list.append(-power)  # Minimizar o negativo para maximizar a produção
+        
+        # Converter a lista de produções de energia em um array com a forma correta
+        out["F"] = np.array(power_list).reshape(-1, 1)
+        
+vet_yaw_nom=yaw_angles
+problem = WindFarmOptimization(floris_interface=fi, n_turbines=num_turbine, wind_speeds=wind_speeds[0], wind_directions=wind_directions[0], yaw_nom=vet_yaw_nom)
+
+# Escolhendo o algoritmo genético (GA)
+algorithm = GA(pop_size=50)
+
+# Configurando a execução
+#termination = get_termination("n_gen", 1000, "ftol", 1e-1)
+termination = DefaultMultiObjectiveTermination(
+ftol=0.0025,
+n_max_gen=100,
+)
+
+# Executando o algoritmo
+result = minimize(problem,
+                algorithm,
+                termination,
+                seed=1,
+                verbose=True)
+
+# Analisando os resultados
+print("Melhor solução encontrada: \nYaw Angles = %s\nProdução de Energia = %s" % (result.X, -result.F))
+
+# Plotando a evolução do melhor valor da função objetivo
+history = result.history
+F_history = [-entry.opt[0].F[0] for entry in history]
+plt.plot(F_history)
+plt.xlabel("Geração")
+plt.ylabel("Produção de Energia")
+plt.title("Evolução da Produção de Energia")
+
+end_time_GA = time.time()
+GA_time=end_time_GA - start_time_GA
+producao_total_opt=float(-result.F)
+vet_yaw_ga=result.X
+vet_yaw_meucodigo=vet_yaw_nom[0][0]
+
+
+imprime_resultados(num_turbine, vet_yaw_nom, wind_speeds, wind_directions, fi, potencia_parque)
+
+print('===========================')
+print("Produção total nominal: ", "{:.2f}".format(producao_total_nom),"kW")
+print('')
+print("Produção total otimizada (meu codigo): ", parque_opt,"kW")
+saldo2=parque_opt-producao_total_nom
+print("Saldo da otimização parque (meu codigo): ", "{:.2f}".format(saldo2),"kW")
+print("Saldo percentual: +", "{:.2f}".format(saldo2*100/producao_total_nom),"%")
+print("Duração de simulação: ", "{:.2f}s".format(meucodigo_time))
+print('')
+print("Produção total otimizada (GA)): ", "{:.2f}".format(producao_total_opt),"kW")
+saldo3=producao_total_opt-producao_total_nom
+print("Saldo da otimização parque (GA): ", "{:.2f}".format(saldo3),"kW")
+print("Saldo percentual: +", "{:.2f}".format(saldo3*100/producao_total_nom),"%")
+print("Duração de simulação: ", "{:.2f}s".format(GA_time))
+print('================== =========')
+
+
+
+
+# ===============================================================================================================
+# ===============================================================================================================
+
+horizontal_plane1 = fi.calculate_horizontal_plane(
+    x_resolution=200,
+    y_resolution=100,
+    height=90.0,
+    yaw_angles=np.array([[np.zeros(num_turbine)]]),
+)
+
+horizontal_plane2 = fi.calculate_horizontal_plane(
+    x_resolution=200,
+    y_resolution=100,
+    height=90.0,
+    yaw_angles=np.array([[vet_yaw_meucodigo]]),
+)
+
+
+horizontal_plane3 = fi.calculate_horizontal_plane(
+    x_resolution=200,
+    y_resolution=100,
+    height=90.0,
+    yaw_angles=np.array([[vet_yaw_ga]]),
+)
+
+
+# Create the plots
+fig, ax_list = plt.subplots(3, 1, figsize=(10, 8))
+ax_list = ax_list.flatten()
+wakeviz.visualize_cut_plane(
+    horizontal_plane1,
+    ax=ax_list[0],
+    label_contours=True,
+    title="Sem desalinhamento"
+)
+wakeviz.visualize_cut_plane(
+    horizontal_plane2,
+    ax=ax_list[1],
+    label_contours=True,
+    title="Desalinhamento: Solução 1"
+)
+wakeviz.visualize_cut_plane(
+    horizontal_plane3,
+    ax=ax_list[2],
+    label_contours=True,
+    title="Desalinhamento: Solução 2"
+)
+
 
 
 # Registre o tempo de término
