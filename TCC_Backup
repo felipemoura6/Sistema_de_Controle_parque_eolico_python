@@ -437,113 +437,115 @@ class WindFarmOptimization(Problem):
         
         # Converter a lista de produções de energia em um array com a forma correta
         out["F"] = np.array(power_list).reshape(-1, 1)
-        
+print(vet_yaw_nom)
 vet_yaw_nom=yaw_angles
-problem = WindFarmOptimization(floris_interface=fi, n_turbines=num_turbine, wind_speeds=wind_speeds[0], wind_directions=wind_directions[0], yaw_nom=vet_yaw_nom)
+print(yaw_angles)
+for i in range(len(wind_directions)):
+    problem = WindFarmOptimization(floris_interface=fi, n_turbines=num_turbine, wind_speeds=wind_speeds[i], wind_directions=wind_directions[i], yaw_nom=vet_yaw_nom)
 
-# Escolhendo o algoritmo genético (GA)
-algorithm = GA(pop_size=50)
+    # Escolhendo o algoritmo genético (GA)
+    algorithm = GA(pop_size=50)
 
-# Configurando a execução
-#termination = get_termination("n_gen", 1000, "ftol", 1e-1)
-termination = DefaultMultiObjectiveTermination(
-ftol=0.0025,
-n_max_gen=100,
+    # Configurando a execução
+    #termination = get_termination("n_gen", 1000, "ftol", 1e-1)
+    termination = DefaultMultiObjectiveTermination(
+    ftol=0.0025,
+    n_max_gen=10,
 )
 
-# Executando o algoritmo
-result = minimize(problem,
-                algorithm,
-                termination,
-                seed=1,
-                verbose=True)
+    # Executando o algoritmo
+    result = minimize(problem,
+                    algorithm,
+                    termination,
+                    seed=524,
+                    verbose=True)
 
-# Analisando os resultados
-print("Melhor solução encontrada: \nYaw Angles = %s\nProdução de Energia = %s" % (result.X, -result.F))
+    # Analisando os resultados
+    print("Melhor solução encontrada: \nYaw Angles = %s\nProdução de Energia = %s" % (result.X, -result.F))
 
-# Plotando a evolução do melhor valor da função objetivo
-history = result.history
-F_history = [-entry.opt[0].F[0] for entry in history]
-plt.plot(F_history)
-plt.xlabel("Geração")
-plt.ylabel("Produção de Energia")
-plt.title("Evolução da Produção de Energia")
+    # Plotando a evolução do melhor valor da função objetivo
+    history = result.history
+    F_history = [-entry.opt[0].F[0] for entry in history]
+    plt.plot(F_history)
+    plt.xlabel("Geração")
+    plt.ylabel("Produção de Energia")
+    plt.title("Evolução da Produção de Energia")
 
-end_time_GA = time.time()
-GA_time=end_time_GA - start_time_GA
-producao_total_opt=float(-result.F)
-vet_yaw_ga=result.X
-vet_yaw_meucodigo=vet_yaw_nom[0][0]
-
-
-imprime_resultados(num_turbine, vet_yaw_nom, wind_speeds, wind_directions, fi, potencia_parque)
-
-print('===========================')
-print("Produção total nominal: ", "{:.2f}".format(producao_total_nom),"kW")
-print('')
-print("Produção total otimizada (meu codigo): ", parque_opt,"kW")
-saldo2=parque_opt-producao_total_nom
-print("Saldo da otimização parque (meu codigo): ", "{:.2f}".format(saldo2),"kW")
-print("Saldo percentual: +", "{:.2f}".format(saldo2*100/producao_total_nom),"%")
-print("Duração de simulação: ", "{:.2f}s".format(meucodigo_time))
-print('')
-print("Produção total otimizada (GA)): ", "{:.2f}".format(producao_total_opt),"kW")
-saldo3=producao_total_opt-producao_total_nom
-print("Saldo da otimização parque (GA): ", "{:.2f}".format(saldo3),"kW")
-print("Saldo percentual: +", "{:.2f}".format(saldo3*100/producao_total_nom),"%")
-print("Duração de simulação: ", "{:.2f}s".format(GA_time))
-print('================== =========')
+    end_time_GA = time.time()
+    GA_time=end_time_GA - start_time_GA
+    producao_total_opt=float(-result.F)
+    vet_yaw_ga=result.X
+    vet_yaw_meucodigo=vet_yaw_nom[0][0]
 
 
+    #imprime_resultados(num_turbine, vet_yaw_nom[i], wind_speeds, wind_directions, fi, potencia_parque)
+    
+    print('===========================')
+    print("Produção total nominal: ", "{:.2f}".format(producao_total_nom),"kW")
+    print('')
+    print("Produção total otimizada (meu codigo): ", parque_opt,"kW")
+    saldo2=parque_opt-producao_total_nom
+    print("Saldo da otimização parque (meu codigo): ", "{:.2f}".format(saldo2),"kW")
+    print("Saldo percentual: +", "{:.2f}".format(saldo2*100/producao_total_nom),"%")
+    print("Duração de simulação: ", "{:.2f}s".format(meucodigo_time))
+    print('')
+    print("Produção total otimizada (GA)): ", "{:.2f}".format(producao_total_opt),"kW")
+    saldo3=producao_total_opt-producao_total_nom
+    print("Saldo da otimização parque (GA): ", "{:.2f}".format(saldo3),"kW")
+    print("Saldo percentual: +", "{:.2f}".format(saldo3*100/producao_total_nom),"%")
+    print("Duração de simulação: ", "{:.2f}s".format(GA_time))
+    print('================== =========')
 
 
-# ===============================================================================================================
-# ===============================================================================================================
-
-horizontal_plane1 = fi.calculate_horizontal_plane(
-    x_resolution=200,
-    y_resolution=100,
-    height=90.0,
-    yaw_angles=np.array([[np.zeros(num_turbine)]]),
-)
-
-horizontal_plane2 = fi.calculate_horizontal_plane(
-    x_resolution=200,
-    y_resolution=100,
-    height=90.0,
-    yaw_angles=np.array([[vet_yaw_meucodigo]]),
-)
 
 
-horizontal_plane3 = fi.calculate_horizontal_plane(
-    x_resolution=200,
-    y_resolution=100,
-    height=90.0,
-    yaw_angles=np.array([[vet_yaw_ga]]),
-)
+    # ===============================================================================================================
+    # ===============================================================================================================
+
+    horizontal_plane1 = fi.calculate_horizontal_plane(
+        x_resolution=200,
+        y_resolution=100,
+        height=90.0,
+        yaw_angles=np.array([[np.zeros(num_turbine)]]),
+    )
+
+    horizontal_plane2 = fi.calculate_horizontal_plane(
+        x_resolution=200,
+        y_resolution=100,
+        height=90.0,
+        yaw_angles=np.array([[vet_yaw_meucodigo]]),
+    )
 
 
-# Create the plots
-fig, ax_list = plt.subplots(3, 1, figsize=(10, 8))
-ax_list = ax_list.flatten()
-wakeviz.visualize_cut_plane(
-    horizontal_plane1,
-    ax=ax_list[0],
-    label_contours=True,
-    title="Sem desalinhamento"
-)
-wakeviz.visualize_cut_plane(
-    horizontal_plane2,
-    ax=ax_list[1],
-    label_contours=True,
-    title="Desalinhamento: Solução 1"
-)
-wakeviz.visualize_cut_plane(
-    horizontal_plane3,
-    ax=ax_list[2],
-    label_contours=True,
-    title="Desalinhamento: Solução 2"
-)
+    horizontal_plane3 = fi.calculate_horizontal_plane(
+        x_resolution=200,
+        y_resolution=100,
+        height=90.0,
+        yaw_angles=np.array([[vet_yaw_ga]]),
+    )
+
+
+    # Create the plots
+    fig, ax_list = plt.subplots(3, 1, figsize=(10, 8))
+    ax_list = ax_list.flatten()
+    wakeviz.visualize_cut_plane(
+        horizontal_plane1,
+        ax=ax_list[0],
+        label_contours=True,
+        title="Horizontal - (Normal)"
+    )
+    wakeviz.visualize_cut_plane(
+        horizontal_plane2,
+        ax=ax_list[1],
+        label_contours=True,
+        title="Horizontal - (Meu Codigo)"
+    )
+    wakeviz.visualize_cut_plane(
+        horizontal_plane3,
+        ax=ax_list[2],
+        label_contours=True,
+        title="Horizontal (GA)"
+    )
 
 
 
