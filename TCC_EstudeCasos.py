@@ -41,7 +41,7 @@ vet_yaw_nom = None
 ## ================================== Subrotina de configuração de parâmetros ==============================================
 
 def parametros_caso(caso_simulacao):
-    global vet_yaw_nom, vet_layout_x, vet_layout_y, num_turbine  # Defina as variáveis como globais para que possam ser modificadas
+    global vet_yaw_nom, vet_layout_x, vet_layout_y, num_turbine, vet_wind_direction  # Defina as variáveis como globais para que possam ser modificadas
     vet_layout_y = np.zeros((situacoes))
     vet_layout_x = 3*D*np.ones((situacoes))
     
@@ -110,7 +110,7 @@ def parametros_caso(caso_simulacao):
             print(f'Caso: {caso_simulacao}: Turbinas: 2 // Velocidade do Vento = Fixa // Direção do Vento = Fixa // Ângulo Yaw = Variando // Layout = Variando')
             
             start_layoutx = 3*D
-            increment_layoutx = 200
+            increment_layoutx = 50
             num_turbine=2
             
             fi.reinitialize(layout_x=[0.,100], layout_y=[0.,0.])  # Layout do parque
@@ -153,11 +153,35 @@ def parametros_caso(caso_simulacao):
         
         
         
-        case 6: # Turbinas: 2 // Velocidade do Vento = Fixa // Direção do Vento = Fixa // Ângulo Yaw = Variável // Layout = Variando em X
-            print(f'Caso: {caso_simulacao}: Turbinas: 2 // Velocidade do Vento = Fixa // Direção do Vento = Fixa // Ângulo Yaw = Variando // Layout = Variando')
+        # case 6: # Turbinas: 2 // Velocidade do Vento = Fixa // Direção do Vento = Fixa // Ângulo Yaw = Variável // Layout = Variando em X
+        #     print(f'Caso: {caso_simulacao}: Turbinas: 2 // Velocidade do Vento = Fixa // Direção do Vento = Fixa // Ângulo Yaw = Variando // Layout = Variando')
             
-            start_layoutx = 3*D
-            increment_layoutx = 20
+        #     start_layoutx = 3*D
+        #     increment_layoutx = 20
+        #     num_turbine=2
+            
+        #     fi.reinitialize(layout_x=[0.,100], layout_y=[0.,0.])  # Layout do parque
+            
+        #     for i in range(len(fi.layout_x)):       # Laço para nomear as turbinas no formato 'T01' usando o length do layout
+        #         turbine_name.append('T{:02d}'.format(i+1))
+            
+        #     vet_yaw_nom = 0*np.ones((situacoes,num_turbine))
+        #     vet_layout_x = 3*D*np.ones((situacoes))
+            
+        #     for i in range(situacoes):
+        #         vet_layout_x[i] = start_layoutx+ i*increment_layoutx
+        #         vet_yaw_nom[i,1]=3*i
+        #     return
+        
+        
+        case 7: # Turbinas: 2 // Velocidade do Vento = Fixa // Direção do Vento = Fixa // Ângulo Yaw = Variável // Layout = Variando em X
+            print(f'Caso: {caso_simulacao}: Turbinas: 2 // Velocidade do Vento = Fixa // Direção do Vento = Variável // Ângulo Yaw = Fixo // Layout = Fixo')
+            
+            start_direcao = 0
+            increment_direcao = 20
+            vet_wind_direction = [start_direcao + increment_direcao * i for i in range(situacoes)]
+            print('Vetor Direção do Vento: ', vet_wind_direction)
+            
             num_turbine=2
             
             fi.reinitialize(layout_x=[0.,100], layout_y=[0.,0.])  # Layout do parque
@@ -165,12 +189,10 @@ def parametros_caso(caso_simulacao):
             for i in range(len(fi.layout_x)):       # Laço para nomear as turbinas no formato 'T01' usando o length do layout
                 turbine_name.append('T{:02d}'.format(i+1))
             
+            wind_directions[0]=90
             vet_yaw_nom = 0*np.ones((situacoes,num_turbine))
             vet_layout_x = 3*D*np.ones((situacoes))
             
-            for i in range(situacoes):
-                vet_layout_x[i] = start_layoutx+ i*increment_layoutx
-                vet_yaw_nom[i,1]=3*i
             return
 
 ## =========================================================================================================================
@@ -190,6 +212,9 @@ def calculo_producao_total(num_turbinas, vet_layout_x, vet_layout_y, vet_yaw, wi
     farm_powers = np.zeros(num_casos)  # Inicializa um array para armazenar as potências
    
     for i in range(num_casos):
+        if(caso_simulacao==7):
+            wind_directions[0]=vet_wind_direction[i]
+            
         fi.reinitialize(wind_speeds=wind_speeds, wind_directions=wind_directions)  # Passando a velocidade e direção do vento atual para o FlorisInterface
        
         if(num_turbinas == 2): # Coloca layout em x para duas turbinas exceto no caso 1
@@ -335,7 +360,7 @@ print(f"Vento: {wind_speeds[0]}m/s - {wind_directions[0]}°")
 print('')
 
 situacoes=21
-caso_simulacao=4
+caso_simulacao=7
 
 parametros_caso(caso_simulacao)
 
@@ -427,13 +452,25 @@ if(caso_simulacao==5):
     plt.plot(vet_layout_y, farm_powers_nom, marker='o', linestyle='-', color='b', label='Farm Powers Nom')
     if(num_turbine == 2): plt.plot(vet_layout_y, farm_t[0, :], marker='o', linestyle='-', color='r', label='T1')
     if(num_turbine == 2): plt.plot(vet_layout_y, farm_t[1, :], marker='o', linestyle='-', color='g', label='T2')
-    plt.title('Potência X Distância')
+    plt.title('Potência X Distância em Y')
     plt.xlabel('Distância em Y (m)')
     plt.ylabel('Potência (kW)')
     plt.grid(True)
     plt.legend()  # Adiciona a legenda
     plt.show()
 
+
+if(caso_simulacao==7):
+    plt.plot(vet_layout_y, farm_powers_nom, marker='o', linestyle='-', color='b', label='Farm Powers Nom')
+    if(num_turbine == 2): plt.plot(vet_wind_direction, farm_t[0, :], marker='o', linestyle='-', color='r', label='T1')
+    if(num_turbine == 2): plt.plot(vet_wind_direction, farm_t[1, :], marker='o', linestyle='-', color='g', label='T2')
+    if(num_turbine == 2): plt.plot(vet_wind_direction, farm_powers, marker='o', linestyle='-', color='b', label='T2')
+    plt.title('Potência X Direção Vento')
+    plt.xlabel('Direção (°)')
+    plt.ylabel('Potência (kW)')
+    plt.grid(True)
+    plt.legend()  # Adiciona a legenda
+    plt.show()
 
 ## ========================================= LAYOUT DO PARQUE ====================================================
 
