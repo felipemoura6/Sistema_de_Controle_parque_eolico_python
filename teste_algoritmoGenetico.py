@@ -4,7 +4,7 @@ import random
 # Parâmetros do algoritmo genético
 NUM_TURBINAS = 3        # Número de turbinas no parque eólico
 TAM_POPULACAO = 10      # Quantidade de indivíduos na população
-NUM_GERACAO = 10     # Quantidade de gerações
+NUM_GERACAO = 3     # Quantidade de gerações
 TAXA_MUTACAO = 0.1       # Taxa de mutação
 YAW_MIN = -30             # Ângulo mínimo do yaw
 YAW_MAX = 30              # Ângulo máximo do yaw
@@ -30,11 +30,9 @@ def populacao_inicial():
     
     # Cria a população inicial com ângulos yaw aleatórios para cada turbina.
     populacao = []
-    print("População Inicial: ")
     for i in range(TAM_POPULACAO):
         # Cada indivíduo é um vetor de ângulos yaw (aleatórios entre YAW_MIN e YAW_MAX)
         individuo = [random.uniform(YAW_MIN, YAW_MAX) for j in range(NUM_TURBINAS)]
-        print("Individuo", i, ": ", individuo)
         populacao.append(individuo)
     print("")
     
@@ -63,11 +61,11 @@ def crossover(pai1, pai2):
 
     Primeira parte do filho (até o ponto de cruzamento) vem de pai1: [-10]
     Segunda parte do filho (a partir do ponto de cruzamento) vem de pai2: [-5, 30]
-
+              0    1   2
     filho = [-10, -5, 30]
     """
     
-    crossover_point = random.randint(0, NUM_TURBINAS-1)
+    crossover_point = random.randint(0, NUM_TURBINAS-1) # 0, 1 ou 2
     filho = pai1[:crossover_point] + pai2[crossover_point:]
     return filho
 
@@ -86,17 +84,27 @@ def mutacao(individuo):
 def genetic_algorithm():
     # Inicializa a população
     populacao = populacao_inicial()
+
     
     # Itera por várias gerações
     for geracao in range(NUM_GERACAO):
+        print()
+        print(f"\nGeração {geracao + 1}:")
+        print("População e Aptidão:")
+
         # Calcula a aptidão de cada indivíduo
         fitness_scores = [fitness(individuo) for individuo in populacao]
+        
+        # Itera e imprime cada indivíduo com uma numeração e sua aptidão
+        for indice, (individuo, score) in enumerate(zip(populacao, fitness_scores), start=1):
+            angulos_formatados = ", ".join(f"{angulo:.3f}°" for angulo in individuo)  # Formata apenas para imprimir os ângulos com 3 casas decimais
+            print(f"Indivíduo {indice}: Ângulos Yaw = [{angulos_formatados}], Fitness = {score:.2f} kW")
         
         # Encontra o melhor indivíduo da geração
         melhor_fitness = max(fitness_scores)
         melhor_individuo = populacao[fitness_scores.index(melhor_fitness)]
 
-        print(f"Geração {geracao+1}: Melhor aptidão = ", "{:.2f}".format(melhor_fitness), melhor_individuo)
+        print(f"Melhor aptidão = {melhor_fitness:.2f}, Melhor indivíduo = {melhor_individuo}")
         
         # Nova população
         nova_populacao = []
@@ -130,4 +138,10 @@ def genetic_algorithm():
     print("Aptidão da melhor solução:", melhor_fitness)
 
 # Executa o algoritmo genético
+print('==================================================')
+print()
 genetic_algorithm()
+print('==================================================')
+print()
+print()
+
