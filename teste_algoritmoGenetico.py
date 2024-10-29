@@ -3,7 +3,7 @@ import random
 
 # Parâmetros do algoritmo genético
 NUM_TURBINAS = 3        # Número de turbinas no parque eólico
-TAM_POPULACAO = 20      # Quantidade de indivíduos na população
+TAM_POPULACAO = 10      # Quantidade de indivíduos na população
 NUM_GERACAO = 10     # Quantidade de gerações
 TAXA_MUTACAO = 0.1       # Taxa de mutação
 YAW_MIN = -30             # Ângulo mínimo do yaw
@@ -13,31 +13,30 @@ YAW_MAX = 30              # Ângulo máximo do yaw
 def fitness(individuo):
     """
     Função de aptidão que simula a produção de energia com base nos ângulos yaw.
-    Penaliza grandes diferenças de ângulos que causam turbulência.
     """
-    energia = 0
+    producao = 0
     for i in range(NUM_TURBINAS):
         # Mais próximo do ângulo ótimo (0), maior a energia.
-        energia += 100 - abs(individuo[i])
+        producao += 100 - abs(individuo[i])
     
     
-    # Penalização por turbulência (diferenças bruscas de ângulos entre turbinas)
+    # Penalização por turbulência
     penalidade = sum(abs(individuo[i] - individuo[i-1]) for i in range(1, NUM_TURBINAS))
     
-    return energia - penalidade
+    return producao - penalidade
 
 # Inicialização da população
 def populacao_inicial():
-    """
-    Cria a população inicial com ângulos yaw aleatórios para cada turbina.
-    """
+    
+    # Cria a população inicial com ângulos yaw aleatórios para cada turbina.
     populacao = []
     print("População Inicial: ")
-    for _ in range(TAM_POPULACAO):
+    for i in range(TAM_POPULACAO):
         # Cada indivíduo é um vetor de ângulos yaw (aleatórios entre YAW_MIN e YAW_MAX)
-        individuo = [random.uniform(YAW_MIN, YAW_MAX) for _ in range(NUM_TURBINAS)]
-        print("Individuo", _, ": ", individuo)
+        individuo = [random.uniform(YAW_MIN, YAW_MAX) for j in range(NUM_TURBINAS)]
+        print("Individuo", i, ": ", individuo)
         populacao.append(individuo)
+    print("")
     
     return populacao
 
@@ -46,16 +45,30 @@ def selecao(populacao, fitness_scores):
     """
     Seleciona dois pais da população via seleção por torneio.
     """
-    # Escolhemos dois indivíduos aleatoriamente e pegamos o melhor
+    # Escolha de dois indivíduos aleatoriamente e selecionando o melhor
     tamanho_selecao = 3
     selected = random.sample(range(TAM_POPULACAO), tamanho_selecao)
     melhor_individual = max(selected, key=lambda x: fitness_scores[x])
     return populacao[melhor_individual]
 
+
+
 # Cruzamento (Crossover)
-def crossover(parent1, parent2):
+def crossover(pai1, pai2):
+    """
+    pai1 = [-10, 5, 20]
+    pai2 = [15, -5, 30]
+    NUM_TURBINAS = 3
+    Se o ponto de cruzamento selecionado for 1, o descendente será gerado como:
+
+    Primeira parte do filho (até o ponto de cruzamento) vem de pai1: [-10]
+    Segunda parte do filho (a partir do ponto de cruzamento) vem de pai2: [-5, 30]
+
+    filho = [-10, -5, 30]
+    """
+    
     crossover_point = random.randint(0, NUM_TURBINAS-1)
-    filho = parent1[:crossover_point] + parent2[crossover_point:]
+    filho = pai1[:crossover_point] + pai2[crossover_point:]
     return filho
 
 # Mutação
@@ -98,13 +111,13 @@ def genetic_algorithm():
             pai2 = selecao(populacao, fitness_scores)
             
             # Realiza o cruzamento
-            child = crossover(pai1, pai2)
+            filho = crossover(pai1, pai2)
             
             # Aplica a mutação
-            child = mutacao(child)
+            filho = mutacao(filho)
             
             # Adiciona o novo indivíduo à nova população
-            nova_populacao.append(child)
+            nova_populacao.append(filho)
         
         # Substitui a população antiga pela nova
         populacao = nova_populacao
