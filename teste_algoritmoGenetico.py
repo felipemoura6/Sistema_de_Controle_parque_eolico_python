@@ -3,11 +3,12 @@ import random
 
 # Parâmetros do algoritmo genético
 NUM_TURBINAS = 3        # Número de turbinas no parque eólico
-TAM_POPULACAO = 10      # Quantidade de indivíduos na população
-NUM_GERACAO = 3     # Quantidade de gerações
+TAM_POPULACAO = 100      # Quantidade de indivíduos na população
+NUM_GERACAO = 100     # Quantidade de gerações
 TAXA_MUTACAO = 0.1       # Taxa de mutação
 YAW_MIN = -30             # Ângulo mínimo do yaw
 YAW_MAX = 30              # Ângulo máximo do yaw
+COUNT = 10              # Número de repetições de gerações consecutivas para valores de aptidão iguais (CRITÉRIO DE PARADA)
 
 # Função de aptidão
 def fitness(individuo):
@@ -84,11 +85,11 @@ def mutacao(individuo):
 def genetic_algorithm():
     # Inicializa a população
     populacao = populacao_inicial()
-
+    melhor_fitness_anterior = 0
+    count = 0
     
     # Itera por várias gerações
     for geracao in range(NUM_GERACAO):
-        print()
         print(f"\nGeração {geracao + 1}:")
         print("População e Aptidão:")
 
@@ -97,14 +98,26 @@ def genetic_algorithm():
         
         # Itera e imprime cada indivíduo com uma numeração e sua aptidão
         for indice, (individuo, score) in enumerate(zip(populacao, fitness_scores), start=1):
-            angulos_formatados = ", ".join(f"{angulo:.3f}°" for angulo in individuo)  # Formata apenas para imprimir os ângulos com 3 casas decimais
-            print(f"Indivíduo {indice}: Ângulos Yaw = [{angulos_formatados}], Fitness = {score:.2f} kW")
+            angulos_formatados = ", ".join(f"{angulo:.3f}°" for angulo in individuo)
+            print(f"Indivíduo {indice}: [{angulos_formatados}], Fitness = {score:.2f} kW")
         
         # Encontra o melhor indivíduo da geração
         melhor_fitness = max(fitness_scores)
         melhor_individuo = populacao[fitness_scores.index(melhor_fitness)]
-
+        
         print(f"Melhor aptidão = {melhor_fitness:.2f}, Melhor indivíduo = {melhor_individuo}")
+        
+        # Critério de parada: verifica se a aptidão está saturada
+        if melhor_fitness == melhor_fitness_anterior:
+            count += 1
+        else:
+            count = 0
+        melhor_fitness_anterior = melhor_fitness
+
+        # Se a aptidão não melhorar por COUNT gerações consecutivas
+        if count >= COUNT:
+            print(f"\nCritério de parada alcançado: Melhor aptidão não melhorou por {COUNT} gerações consecutivas.")
+            break
         
         # Nova população
         nova_populacao = []
@@ -130,10 +143,7 @@ def genetic_algorithm():
         # Substitui a população antiga pela nova
         populacao = nova_populacao
     
-    # Melhor solução final
-    melhor_fitness = max([fitness(individuo) for individuo in populacao])
-    melhor_individuo = populacao[[fitness(individuo) for individuo in populacao].index(melhor_fitness)]
-    
+    # Melhor solução final encontrada
     print("\nMelhor configuração de ângulos yaw encontrada:", melhor_individuo)
     print("Aptidão da melhor solução:", melhor_fitness)
 
