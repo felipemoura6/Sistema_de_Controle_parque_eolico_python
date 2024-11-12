@@ -1,10 +1,11 @@
+from matplotlib import pyplot as plt
 import numpy as np
 import random
 
 # Parâmetros do algoritmo genético
 NUM_TURBINAS = 3        # Número de turbinas no parque eólico
 TAM_POPULACAO = 100      # Quantidade de indivíduos na população
-NUM_GERACAO = 100     # Quantidade de gerações
+NUM_GERACAO = 50    # Quantidade de gerações
 TAXA_MUTACAO = 0.1       # Taxa de mutação
 YAW_MIN = -30             # Ângulo mínimo do yaw
 YAW_MAX = 30              # Ângulo máximo do yaw
@@ -40,7 +41,7 @@ def populacao_inicial():
     return populacao
 
 # Seleção por torneio
-def selecao(populacao, fitness_scores):
+def selecao(populacao, fitness_scores): 
     """
     Seleciona dois pais da população via seleção por torneio.
     """
@@ -87,6 +88,7 @@ def genetic_algorithm():
     populacao = populacao_inicial()
     melhor_fitness_anterior = 0
     count = 0
+    melhor_fitness_historico=[]
     
     # Itera por várias gerações
     for geracao in range(NUM_GERACAO):
@@ -104,6 +106,7 @@ def genetic_algorithm():
         # Encontra o melhor indivíduo da geração
         melhor_fitness = max(fitness_scores)
         melhor_individuo = populacao[fitness_scores.index(melhor_fitness)]
+        melhor_fitness_historico.append(melhor_fitness)
         
         print(f"Melhor aptidão = {melhor_fitness:.2f}, Melhor indivíduo = {melhor_individuo}")
         
@@ -114,7 +117,7 @@ def genetic_algorithm():
             count = 0
         melhor_fitness_anterior = melhor_fitness
 
-        # Se a aptidão não melhorar por COUNT gerações consecutivas
+        # Se a aptidão não alterar por COUNT gerações consecutivas
         if count >= COUNT:
             print(f"\nCritério de parada alcançado: Melhor aptidão não melhorou por {COUNT} gerações consecutivas.")
             break
@@ -146,6 +149,14 @@ def genetic_algorithm():
     # Melhor solução final encontrada
     print("\nMelhor configuração de ângulos yaw encontrada:", melhor_individuo)
     print("Aptidão da melhor solução:", melhor_fitness)
+    
+    # Plotando gráfico da otimização
+    plt.plot(melhor_fitness_historico, marker='o', linestyle='-', color='b')
+    plt.xlabel(f'Valor Final = {max(melhor_fitness_historico):.2f} kW') # Colocando o maior valor otimizado
+    plt.ylabel('Melhor Aptidão (kW)')
+    plt.title('Evolução da Aptidão ao Longo das Gerações')
+    plt.grid(True)
+    plt.show()
 
 # Executa o algoritmo genético
 print('==================================================')
