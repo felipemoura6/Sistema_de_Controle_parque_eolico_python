@@ -1,31 +1,78 @@
 from matplotlib import pyplot as plt
 import numpy as np
 import random
+import math
 
+
+# ==================================================================================================================================
 # Parâmetros do algoritmo genético
 NUM_TURBINAS = 3        # Número de turbinas no parque eólico
-TAM_POPULACAO = 100      # Quantidade de indivíduos na população
-NUM_GERACAO = 50    # Quantidade de gerações
+TAM_POPULACAO = 50      # Quantidade de indivíduos na população
+NUM_GERACAO = 20        # Quantidade de gerações
 TAXA_MUTACAO = 0.1       # Taxa de mutação
 YAW_MIN = -30             # Ângulo mínimo do yaw
 YAW_MAX = 30              # Ângulo máximo do yaw
 COUNT = 10              # Número de repetições de gerações consecutivas para valores de aptidão iguais (CRITÉRIO DE PARADA)
 
-# Função de aptidão
-def fitness(individuo):
-    """
-    Função de aptidão que simula a produção de energia com base nos ângulos yaw.
-    """
-    producao = 0
+u0=8.0          # Velocidade inicial do vento de 8m/s
+r0=40.0         # Raio da turbina
+ct=0.8          # Coeficiente de arrasto
+k=0.075         # Taxa de expansão da esteira (alfa)
+
+layout_x = (0, 5, 10)        # Layout das coordenadas do eixo X
+layout_y = (0, 0, 0)          # Layout das coordenadas do eixo Y
+
+# ==================================================================================================================================
+
+
+
+# # Função de aptidão
+# def fitness(individuo):
+#     """
+#     Função de aptidão que simula a produção de energia com base nos ângulos yaw.
+#     """
+#     producao = 0
+#     for i in range(NUM_TURBINAS):
+#         # Mais próximo do ângulo ótimo (0), maior a energia.
+#         producao += 100 - abs(individuo[i])
+    
+    
+#     # Penalização por turbulência
+#     penalidade = sum(abs(individuo[i] - individuo[i-1]) for i in range(1, NUM_TURBINAS))
+    
+#     return producao - penalidade
+
+
+
+def fitness_jensen(individuo, layout_x, layout_y, r0, u0, ct, k):
+    
+    deltinha = np.zeros(NUM_TURBINAS)       # Inicializando o vetor de reduções da velocidade do vento
+    u = [u0] * NUM_TURBINAS  # Inicializando velocidades
+    
     for i in range(NUM_TURBINAS):
-        # Mais próximo do ângulo ótimo (0), maior a energia.
-        producao += 100 - abs(individuo[i])
+        x_i = layout_x[i] 
+        y_i = layout_y[i]
+        for j in range(i):
+            x_j = layout_x[j] 
+            y_j = layout_y[j]
+            distancia = np.sqrt((x_i - x_j)**2 + (y_i - y_j)**2)
+            
+            if x_i > x_j:  # Só considera esteira para turbinas a jusante
+                raio_esteira = r0 + k * distancia
+                if abs(y_i - y_j) < raio_esteira:  # Turbina está dentro da esteira
+                    fator_reducao = (1 - np.sqrt(1 - ct)) / (1 + k * distancia / r0)**2
+                    deltinha[i] = deltinha[i] + fator_reducao * u[j]
+                    u[i] = u[i] - fator_reducao * u[j]
     
     
-    # Penalização por turbulência
-    penalidade = sum(abs(individuo[i] - individuo[i-1]) for i in range(1, NUM_TURBINAS))
+        # Ajusta velocidade com base no yaw
+        u[i] = u[i]*math.cos(math.radians(individuo[i]))
     
-    return producao - penalidade
+    # Calcula a produção total de energia
+    producao = sum(0.5 * 1.225 * math.pi * r0**2 * ui**3 for ui in u)  # Energia proporcional a v^3 sem descontar os ângulos
+    producao_ajustada = producao * np.cos(np.radians(individuo[i]))**3      # Produção ajustada com o ângulo de inclinação de cada turbina
+    return producao_ajustada/10000
+
 
 # Inicialização da população
 def populacao_inicial():
@@ -85,6 +132,7 @@ def mutacao(individuo):
 # Algoritmo Genético
 def genetic_algorithm():
     # Inicializa a população
+    #fitness_jensen(layout_x, layout_y, r0, u0, ct, k)
     populacao = populacao_inicial()
     melhor_fitness_anterior = 0
     count = 0
@@ -96,7 +144,7 @@ def genetic_algorithm():
         print("População e Aptidão:")
 
         # Calcula a aptidão de cada indivíduo
-        fitness_scores = [fitness(individuo) for individuo in populacao]
+        fitness_scores = [fitness_jensen(individuo, layout_x, layout_y, r0, u0, ct, k) for individuo in populacao]
         
         # Itera e imprime cada indivíduo com uma numeração e sua aptidão
         for indice, (individuo, score) in enumerate(zip(populacao, fitness_scores), start=1):
