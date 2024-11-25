@@ -47,26 +47,38 @@ layout_y = (0, 0, 0)          # Layout das coordenadas do eixo Y
 def fitness_jensen(individuo, layout_x, layout_y, r0, u0, ct, k):
     
     deltinha = np.zeros(NUM_TURBINAS)       # Inicializando o vetor de reduções da velocidade do vento
+    
     u = [u0] * NUM_TURBINAS  # Inicializando velocidades
     
     for i in range(NUM_TURBINAS):
-        x_i = layout_x[i] 
+        x_i = layout_x[i]
         y_i = layout_y[i]
-        for j in range(i):
+        for j in range(i): 
             x_j = layout_x[j] 
             y_j = layout_y[j]
             distancia = np.sqrt((x_i - x_j)**2 + (y_i - y_j)**2)
             
-            if x_i > x_j:  # Só considera esteira para turbinas a jusante
+            if x_i > x_j:  # Apenas esteira para turbinas a jusante
                 raio_esteira = r0 + k * distancia
-                if abs(y_i - y_j) < raio_esteira:  # Turbina está dentro da esteira
-                    fator_reducao = (1 - np.sqrt(1 - ct)) / (1 + k * distancia / r0)**2
-                    deltinha[i] = deltinha[i] + fator_reducao * u[j]
-                    u[i] = u[i] - fator_reducao * u[j]
-    
-    
+                if abs(y_i - y_j)/2 < raio_esteira:  # Turbina está dentro da esteira
+                    fator_reducao = 1-((1 - np.sqrt(1 - ct)) / (1 + k * distancia / r0)**2)   
+                    
+                    if(i==0):   # Verificação se é a primeira turbina
+                        u[i]=u0*(1-fator_reducao)
+                        deltinha[i]=0
+                        
+                    if(i>0):    # Exceto primeira turbina
+                        u[i]=u[i-1]*(1-fator_reducao)
+                        deltinha[i]=1-u[i]/u[i-1]
+                        
+                    soma_quadrados = sum([x**2 for x in deltinha])  # Somatório dos quadrados
+                    deltinha[-1] = math.sqrt(soma_quadrados)    # deltinha médio
+
         # Ajusta velocidade com base no yaw
         u[i] = u[i]*math.cos(math.radians(individuo[i]))
+    print(u)
+    print(deltinha)
+    
     
     # Calcula a produção total de energia
     producao = sum(0.5 * 1.225 * math.pi * r0**2 * ui**3 for ui in u)  # Energia proporcional a v^3 sem descontar os ângulos
@@ -131,9 +143,9 @@ def mutacao(individuo):
 
 # Algoritmo Genético
 def genetic_algorithm():
-    # Inicializa a população
+
     #fitness_jensen(layout_x, layout_y, r0, u0, ct, k)
-    populacao = populacao_inicial()
+    populacao = populacao_inicial()     # Inicializa a população
     melhor_fitness_anterior = 0
     count = 0
     melhor_fitness_historico=[]
