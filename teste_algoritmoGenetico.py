@@ -7,8 +7,8 @@ import math
 # ==================================================================================================================================
 # Parâmetros do algoritmo genético
 NUM_TURBINAS = 3        # Número de turbinas no parque eólico
-TAM_POPULACAO = 50      # Quantidade de indivíduos na população
-NUM_GERACAO = 20        # Quantidade de gerações
+TAM_POPULACAO = 20      # Quantidade de indivíduos na população
+NUM_GERACAO = 10        # Quantidade de gerações
 TAXA_MUTACAO = 0.1       # Taxa de mutação
 YAW_MIN = -30             # Ângulo mínimo do yaw
 YAW_MAX = 30              # Ângulo máximo do yaw
@@ -76,8 +76,8 @@ def fitness_jensen(individuo, layout_x, layout_y, r0, u0, ct, k):
 
         # Ajusta velocidade com base no yaw
         u[i] = u[i]*math.cos(math.radians(individuo[i]))
-    print(u)
-    print(deltinha)
+    print("Velocidades: " , u)
+    print("Deltinha: " , deltinha)
     
     
     # Calcula a produção total de energia
