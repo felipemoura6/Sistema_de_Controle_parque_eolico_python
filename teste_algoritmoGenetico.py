@@ -8,7 +8,7 @@ import math
 # Parâmetros do algoritmo genético
 NUM_TURBINAS = 3        # Número de turbinas no parque eólico
 TAM_POPULACAO = 20      # Quantidade de indivíduos na população
-NUM_GERACAO = 10        # Quantidade de gerações
+NUM_GERACAO = 20        # Quantidade de gerações
 TAXA_MUTACAO = 0.1       # Taxa de mutação
 YAW_MIN = -30             # Ângulo mínimo do yaw
 YAW_MAX = 30              # Ângulo máximo do yaw
@@ -19,7 +19,7 @@ r0=40.0         # Raio da turbina
 ct=0.8          # Coeficiente de arrasto
 k=0.075         # Taxa de expansão da esteira (alfa)
 
-layout_x = (0, 5, 10)        # Layout das coordenadas do eixo X
+layout_x = (0, 10, 40)        # Layout das coordenadas do eixo X
 layout_y = (0, 0, 0)          # Layout das coordenadas do eixo Y
 
 # ==================================================================================================================================
@@ -60,22 +60,18 @@ def fitness_jensen(individuo, layout_x, layout_y, r0, u0, ct, k):
             
             if x_i > x_j:  # Apenas esteira para turbinas a jusante
                 raio_esteira = r0 + k * distancia
+                
                 if abs(y_i - y_j)/2 < raio_esteira:  # Turbina está dentro da esteira
-                    fator_reducao = 1-((1 - np.sqrt(1 - ct)) / (1 + k * distancia / r0)**2)   
-                    
-                    if(i==0):   # Verificação se é a primeira turbina
-                        u[i]=u0*(1-fator_reducao)
-                        deltinha[i]=0
+                    fator_reducao = ((1 - np.sqrt(1 - ct)) / (1 + k * distancia / r0)**2)   
                         
-                    if(i>0):    # Exceto primeira turbina
-                        u[i]=u[i-1]*(1-fator_reducao)
-                        deltinha[i]=1-u[i]/u[i-1]
+                    u[i]=u[i-1]*(1-fator_reducao)
+                    deltinha[i]=1-u[i]/u[i-1]
                         
                     soma_quadrados = sum([x**2 for x in deltinha])  # Somatório dos quadrados
-                    deltinha[-1] = math.sqrt(soma_quadrados)    # deltinha médio
+                    deltinha_med = math.sqrt(soma_quadrados)    # deltinha médio
 
         # Ajusta velocidade com base no yaw
-        u[i] = u[i]*math.cos(math.radians(individuo[i]))
+        u[i] = u[i]*math.cos(0)
     print("Velocidades: " , u)
     print("Deltinha: " , deltinha)
     
@@ -83,7 +79,7 @@ def fitness_jensen(individuo, layout_x, layout_y, r0, u0, ct, k):
     # Calcula a produção total de energia
     producao = sum(0.5 * 1.225 * math.pi * r0**2 * ui**3 for ui in u)  # Energia proporcional a v^3 sem descontar os ângulos
     producao_ajustada = producao * np.cos(np.radians(individuo[i]))**3      # Produção ajustada com o ângulo de inclinação de cada turbina
-    return producao_ajustada/10000
+    return producao_ajustada/1000
 
 
 # Inicialização da população
@@ -191,17 +187,21 @@ def genetic_algorithm():
         # Gera novos indivíduos
         while len(nova_populacao) < TAM_POPULACAO:
             # Seleciona dois pais
+            cruzamento = random.random()
             pai1 = selecao(populacao, fitness_scores)
             pai2 = selecao(populacao, fitness_scores)
             
-            # Realiza o cruzamento
-            filho = crossover(pai1, pai2)
-            
-            # Aplica a mutação
-            filho = mutacao(filho)
-            
-            # Adiciona o novo indivíduo à nova população
-            nova_populacao.append(filho)
+            if(cruzamento>0.55 and cruzamento<0.95):  # 
+                # Realiza o cruzamento
+                filho = crossover(pai1, pai2)
+                
+                # Aplica a mutação
+                filho = mutacao(filho)
+                
+                # Adiciona o novo indivíduo à nova população
+                nova_populacao.append(filho)
+            else:
+                nova_populacao.append(pai1)
         
         # Substitui a população antiga pela nova
         populacao = nova_populacao
