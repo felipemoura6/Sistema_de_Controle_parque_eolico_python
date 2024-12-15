@@ -19,28 +19,10 @@ r0=40.0         # Raio da turbina
 ct=0.8          # Coeficiente de arrasto
 k=0.075         # Taxa de expansão da esteira (alfa)
 
-layout_x = (0, 10, 40)        # Layout das coordenadas do eixo X
+layout_x = (0, 40, 80)        # Layout das coordenadas do eixo X
 layout_y = (0, 0, 0)          # Layout das coordenadas do eixo Y
 
 # ==================================================================================================================================
-
-
-
-# # Função de aptidão
-# def fitness(individuo):
-#     """
-#     Função de aptidão que simula a produção de energia com base nos ângulos yaw.
-#     """
-#     producao = 0
-#     for i in range(NUM_TURBINAS):
-#         # Mais próximo do ângulo ótimo (0), maior a energia.
-#         producao += 100 - abs(individuo[i])
-    
-    
-#     # Penalização por turbulência
-#     penalidade = sum(abs(individuo[i] - individuo[i-1]) for i in range(1, NUM_TURBINAS))
-    
-#     return producao - penalidade
 
 
 
@@ -60,20 +42,68 @@ def fitness_jensen(individuo, layout_x, layout_y, r0, u0, ct, k):
             
             if x_i > x_j:  # Apenas esteira para turbinas a jusante
                 raio_esteira = r0 + k * distancia
-                
                 if abs(y_i - y_j)/2 < raio_esteira:  # Turbina está dentro da esteira
                     fator_reducao = ((1 - np.sqrt(1 - ct)) / (1 + k * distancia / r0)**2)   
-                        
+                    
                     u[i]=u[i-1]*(1-fator_reducao)
-                    deltinha[i]=1-u[i]/u[i-1]
+                    deltinha[i]=1-u[i]/u[0]
                         
                     soma_quadrados = sum([x**2 for x in deltinha])  # Somatório dos quadrados
                     deltinha_med = math.sqrt(soma_quadrados)    # deltinha médio
+            
+                    # Ajusta velocidade com base no yaw
+        u[i] = u[i]*math.cos(math.radians(individuo[i]))
+        print("Velocidades: " , u)
+        print("Deltinha: " , deltinha)
+            
+            # Inicializando variáveis
+        i = 0
+        este = np.zeros(201)
+        est = 30
+        var_x = np.zeros(201)
 
-        # Ajusta velocidade com base no yaw
-        u[i] = u[i]*math.cos(0)
-    print("Velocidades: " , u)
-    print("Deltinha: " , deltinha)
+        # Loop para calcular a área da esteira
+        for x in np.arange(-100, 101, 1):
+            x += 0.00001
+            distancia = x
+            
+            if x <= 0:
+                raio_esteira = -est
+            else:
+                raio_esteira = est
+            
+            if x <= 0:
+                if x + r0 <= raio_esteira:
+                    As = 0
+                elif (x + r0 > raio_esteira and x - r0 < raio_esteira):
+                    y = np.arccos((raio_esteira**2 + distancia**2 - r0**2) / (2 * distancia * raio_esteira))
+                    b = np.arccos((r0**2 + distancia**2 - raio_esteira**2) / (2 * distancia * r0))
+                    As = np.pi * r0**2 - r0**2 * (b - (np.sin(b) * np.cos(b))) + raio_esteira**2 * (y - (np.sin(y) * np.cos(y)))
+                elif x - r0 >= raio_esteira:
+                    As = np.pi * r0**2
+            else:
+                if x - r0 >= raio_esteira:
+                    As = 0
+                elif (x - r0 < raio_esteira and x + r0 > raio_esteira):
+                    y = np.arccos((raio_esteira**2 + distancia**2 - r0**2) / (2 * distancia * raio_esteira))
+                    b = np.arccos((r0**2 + distancia**2 - raio_esteira**2) / (2 * distancia * r0))
+                    As = r0**2 * (b - (np.sin(b) * np.cos(b))) + raio_esteira**2 * (y - (np.sin(y) * np.cos(y)))
+                elif x + r0 <= raio_esteira:
+                    As = np.pi * r0**2
+            
+            este[i] = As
+            var_x[i] = x
+            i = i+1
+
+        # Plotando o gráfico
+        plt.plot(var_x, este)
+        plt.xlabel('Distância (x)')
+        plt.ylabel('Área da Esteira (As)')
+        plt.title('Área da Esteira em Função da Distância')
+        plt.grid(True)
+        plt.show()
+
+
     
     
     # Calcula a produção total de energia
@@ -187,21 +217,17 @@ def genetic_algorithm():
         # Gera novos indivíduos
         while len(nova_populacao) < TAM_POPULACAO:
             # Seleciona dois pais
-            cruzamento = random.random()
             pai1 = selecao(populacao, fitness_scores)
             pai2 = selecao(populacao, fitness_scores)
             
-            if(cruzamento>0.55 and cruzamento<0.95):  # 
-                # Realiza o cruzamento
-                filho = crossover(pai1, pai2)
-                
-                # Aplica a mutação
-                filho = mutacao(filho)
-                
-                # Adiciona o novo indivíduo à nova população
-                nova_populacao.append(filho)
-            else:
-                nova_populacao.append(pai1)
+            # Realiza o cruzamento
+            filho = crossover(pai1, pai2)
+            
+            # Aplica a mutação
+            filho = mutacao(filho)
+            
+            # Adiciona o novo indivíduo à nova população
+            nova_populacao.append(filho)
         
         # Substitui a população antiga pela nova
         populacao = nova_populacao
@@ -225,4 +251,3 @@ genetic_algorithm()
 print('==================================================')
 print()
 print()
-
