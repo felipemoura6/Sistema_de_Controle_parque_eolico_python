@@ -19,16 +19,51 @@ r0=40.0         # Raio da turbina
 ct=0.8          # Coeficiente de arrasto
 k=0.075         # Taxa de expansão da esteira (alfa)
 
-layout_x = (0, 40, 80)        # Layout das coordenadas do eixo X
+layout_x = (0, 10, 20)        # Layout das coordenadas do eixo X
 layout_y = (0, 0, 0)          # Layout das coordenadas do eixo Y
-
 # ==================================================================================================================================
 
+def calcula_area_sombreada(x_i,x_j,distancia, r0, est):
+    AsTotal=np.pi * r0**2
+    x = x_i - x_j   # Verifica em qual quadrante está
+    if x <= 0:
+        raio_esteira = -est
+    else:
+        raio_esteira = est
+    
+    if x <= 0:
+        if x + r0 <= raio_esteira:
+            As = 0
+            area_sombreada=0
+        elif (x + r0 > raio_esteira and x - r0 < raio_esteira):
+            y = np.arccos((raio_esteira**2 + distancia**2 - r0**2) / (2 * distancia * raio_esteira))
+            b = np.arccos((r0**2 + distancia**2 - raio_esteira**2) / (2 * distancia * r0))
+            As = np.pi * r0**2 - r0**2 * (b - (np.sin(b) * np.cos(b))) + raio_esteira**2 * (y - (np.sin(y) * np.cos(y)))
+            area_sombreada=100*As/AsTotal
+        elif x - r0 >= raio_esteira:
+            As = AsTotal
+            area_sombreada=100
+    else:
+        if x - r0 >= raio_esteira:
+            As = 0
+            area_sombreada=0
+        elif (x - r0 < raio_esteira and x + r0 > raio_esteira):
+            y = np.arccos((raio_esteira**2 + distancia**2 - r0**2) / (2 * distancia * raio_esteira))
+            b = np.arccos((r0**2 + distancia**2 - raio_esteira**2) / (2 * distancia * r0))
+            As = r0**2 * (b - (np.sin(b) * np.cos(b))) + raio_esteira**2 * (y - (np.sin(y) * np.cos(y)))
+            area_sombreada=100*As/AsTotal
+        elif x + r0 <= raio_esteira:
+            As = AsTotal
+            area_sombreada=100
 
+
+    # Caso contrário, a área sombreada é a área total da esteira
+    return area_sombreada  # Percentual da área sombreada
 
 def fitness_jensen(individuo, layout_x, layout_y, r0, u0, ct, k):
     
     deltinha = np.zeros(NUM_TURBINAS)       # Inicializando o vetor de reduções da velocidade do vento
+    area_sombreada = np.zeros(NUM_TURBINAS)
     
     u = [u0] * NUM_TURBINAS  # Inicializando velocidades
     
@@ -40,6 +75,7 @@ def fitness_jensen(individuo, layout_x, layout_y, r0, u0, ct, k):
             y_j = layout_y[j]
             distancia = np.sqrt((x_i - x_j)**2 + (y_i - y_j)**2)
             
+            
             if x_i > x_j:  # Apenas esteira para turbinas a jusante
                 raio_esteira = r0 + k * distancia
                 if abs(y_i - y_j)/2 < raio_esteira:  # Turbina está dentro da esteira
@@ -50,58 +86,13 @@ def fitness_jensen(individuo, layout_x, layout_y, r0, u0, ct, k):
                         
                     soma_quadrados = sum([x**2 for x in deltinha])  # Somatório dos quadrados
                     deltinha_med = math.sqrt(soma_quadrados)    # deltinha médio
+                    area_sombreada=calcula_area_sombreada(x_i,x_j,distancia,r0,r0 + k * distancia)
             
                     # Ajusta velocidade com base no yaw
         u[i] = u[i]*math.cos(math.radians(individuo[i]))
         print("Velocidades: " , u)
         print("Deltinha: " , deltinha)
-            
-            # Inicializando variáveis
-        i = 0
-        este = np.zeros(201)
-        est = 30
-        var_x = np.zeros(201)
-
-        # Loop para calcular a área da esteira
-        for x in np.arange(-100, 101, 1):
-            x += 0.00001
-            distancia = x
-            
-            if x <= 0:
-                raio_esteira = -est
-            else:
-                raio_esteira = est
-            
-            if x <= 0:
-                if x + r0 <= raio_esteira:
-                    As = 0
-                elif (x + r0 > raio_esteira and x - r0 < raio_esteira):
-                    y = np.arccos((raio_esteira**2 + distancia**2 - r0**2) / (2 * distancia * raio_esteira))
-                    b = np.arccos((r0**2 + distancia**2 - raio_esteira**2) / (2 * distancia * r0))
-                    As = np.pi * r0**2 - r0**2 * (b - (np.sin(b) * np.cos(b))) + raio_esteira**2 * (y - (np.sin(y) * np.cos(y)))
-                elif x - r0 >= raio_esteira:
-                    As = np.pi * r0**2
-            else:
-                if x - r0 >= raio_esteira:
-                    As = 0
-                elif (x - r0 < raio_esteira and x + r0 > raio_esteira):
-                    y = np.arccos((raio_esteira**2 + distancia**2 - r0**2) / (2 * distancia * raio_esteira))
-                    b = np.arccos((r0**2 + distancia**2 - raio_esteira**2) / (2 * distancia * r0))
-                    As = r0**2 * (b - (np.sin(b) * np.cos(b))) + raio_esteira**2 * (y - (np.sin(y) * np.cos(y)))
-                elif x + r0 <= raio_esteira:
-                    As = np.pi * r0**2
-            
-            este[i] = As
-            var_x[i] = x
-            i = i+1
-
-        # Plotando o gráfico
-        plt.plot(var_x, este)
-        plt.xlabel('Distância (x)')
-        plt.ylabel('Área da Esteira (As)')
-        plt.title('Área da Esteira em Função da Distância')
-        plt.grid(True)
-        plt.show()
+        print("Area S: " , area_sombreada)
 
 
     
@@ -248,6 +239,75 @@ def genetic_algorithm():
 print('==================================================')
 print()
 genetic_algorithm()
+
+
+
+este = np.zeros(200) 
+var_x = np.zeros(200) 
+r0 = 30
+est = 40
+i = 0 
+area_sombreada = np.zeros(200)
+
+for x in np.arange(-100, 100, 1):
+    x += 0.00001
+    distancia = x
+    AsTotal=np.pi * r0**2
+    
+    if x <= 0:
+        raio_esteira = -est
+    else:
+        raio_esteira = est
+    
+    if x <= 0:
+        if x + r0 <= raio_esteira:
+            As = 0
+            area_sombreada[i]=0
+        elif (x + r0 > raio_esteira and x - r0 < raio_esteira):
+            y = np.arccos((raio_esteira**2 + distancia**2 - r0**2) / (2 * distancia * raio_esteira))
+            b = np.arccos((r0**2 + distancia**2 - raio_esteira**2) / (2 * distancia * r0))
+            As = np.pi * r0**2 - r0**2 * (b - (np.sin(b) * np.cos(b))) + raio_esteira**2 * (y - (np.sin(y) * np.cos(y)))
+            area_sombreada[i]=100*As/AsTotal
+        elif x - r0 >= raio_esteira:
+            As = AsTotal
+            area_sombreada[i]=100
+    else:
+        if x - r0 >= raio_esteira:
+            As = 0
+            area_sombreada[i]=0
+        elif (x - r0 < raio_esteira and x + r0 > raio_esteira):
+            y = np.arccos((raio_esteira**2 + distancia**2 - r0**2) / (2 * distancia * raio_esteira))
+            b = np.arccos((r0**2 + distancia**2 - raio_esteira**2) / (2 * distancia * r0))
+            As = r0**2 * (b - (np.sin(b) * np.cos(b))) + raio_esteira**2 * (y - (np.sin(y) * np.cos(y)))
+            area_sombreada[i]=100*As/AsTotal
+        elif x + r0 <= raio_esteira:
+            As = AsTotal
+            area_sombreada[i]=100
+    
+    este[i] = As
+    var_x[i] = x
+    i += 1 
+    
+# Plotando o gráfico
+
+fig, axes = plt.subplots(2, 1, figsize=(8, 6))  # 2 linha, 1 coluna
+
+# Plot da área da esteira
+axes[0].plot(var_x, este)
+axes[0].set_xlabel('Distância (x)')
+axes[0].set_ylabel('Área da Esteira (As)')
+axes[0].set_title('Área da Esteira em Função da Distância')
+axes[0].grid(True)
+
+# Plot da redução
+axes[1].plot(var_x, area_sombreada)
+axes[1].set_xlabel('Distância (x)')
+axes[1].set_ylabel('Área sombreada (%)')
+axes[1].set_title('Area sombreada em Função da Distância')
+axes[1].grid(True)
+
+plt.tight_layout()
+plt.show()
 print('==================================================')
 print()
 print()
