@@ -68,14 +68,15 @@ def calcula_area_sombreada(x_i, x_j, r0, est):
         print("Area Sombreada(%): " , area_sombreada)
         print("Raio da esteira: ", est)
 
-    return area_sombreada  # Percentual da área sombreada
+    return area_sombreada/100  # Percentual da área sombreada
 
 def fitness_jensen(individuo, layout_x, layout_y, r0, u0, ct, k):
     
     deltinha = np.zeros(NUM_TURBINAS)       # Inicializando o vetor de reduções da velocidade do vento
-    area_sombreada = np.zeros(NUM_TURBINAS)
+    area_sombreada = 0
     
     u = [u0] * NUM_TURBINAS  # Inicializando velocidades
+    v = [u0] * NUM_TURBINAS  # Inicializando velocidades
     
     for i in range(NUM_TURBINAS):
         x_i = layout_x[i]
@@ -89,17 +90,20 @@ def fitness_jensen(individuo, layout_x, layout_y, r0, u0, ct, k):
             if y_i > y_j:  # Apenas esteira para turbinas a jusante
                 raio_esteira = r0 + k * distancia
                 if abs(x_i - x_j)/2 < raio_esteira:  # Turbina está dentro da esteira
-                    fator_reducao = ((1 - np.sqrt(1 - ct)) / (1 + k * distancia / r0)**2)   
+                    # fator_reducao = ((1 - np.sqrt(1 - ct)) / (1 + k * distancia / r0)**2)   
                     
-                    u[i]=u[i-1]*(1-fator_reducao)
-                    deltinha[i]=1-u[i]/u[0]
+                    # u[i]=u[i-1]*(1-fator_reducao)
+                    # deltinha[i]=1-u[i]/u[0]
                         
                     soma_quadrados = sum([x**2 for x in deltinha])  # Somatório dos quadrados
                     deltinha_med = math.sqrt(soma_quadrados)    # deltinha médio
                     if(printAreaSombreada == True): print('Calculo da area sombreada: Turbinas: T', j, ' - T', i)
-                    area_sombreada=calcula_area_sombreada(x_i, x_j, r0,r0 + k * distancia)
-            
+                    As=calcula_area_sombreada(x_i, x_j, r0,r0 + k * distancia)
+                    v[i]= u0*(1-(1-np.sqrt(1-ct)) * 4*r0**2 / (np.pi*r0**2) * (area_sombreada / (2*raio_esteira**2)))   ##  Formula da Tese de Jose Ricardo - pag 41
+                    u[i]=v[i]*As+u0*(1-As)
+                    print(As,u[i])
                     # Ajusta velocidade com base no yaw
+                    
         u[i] = u[i]*math.cos(math.radians(individuo[i]))
 
 
