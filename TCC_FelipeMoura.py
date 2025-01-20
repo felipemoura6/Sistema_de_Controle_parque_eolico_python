@@ -19,14 +19,14 @@ r0=40.0         # Raio da turbina
 ct=0.8          # Coeficiente de arrasto
 k=0.075         # Taxa de expansão da esteira (alfa)
 
-layout_x = (0, 0, 0)        # Layout das coordenadas do eixo X
+layout_x = (0, 20, 40)        # Layout das coordenadas do eixo X
 layout_y = (0, 50, 100)          # Layout das coordenadas do eixo Y
 NUM_TURBINAS = len(layout_x)        # Número de turbinas no parque eólico
 
 # True = Sim ---- False = Não
 plotarAreaSombreada = False     # Plotar Area Sombreada
-plotarOtimizacao = False        # Plotar Gráfico da otimização ao longo das gerações
-printAG = False                 # Prints do Algoritmo Genético
+plotarOtimizacao = True        # Plotar Gráfico da otimização ao longo das gerações
+printAG = True                 # Prints do Algoritmo Genético
 plotarLayout = True             # Plotar Layout do parque
 printAreaSombreada = True       # Prints sobre as Áreas Sombreadas das turbinas
 # ==================================================================================================================================
@@ -84,24 +84,20 @@ def fitness_jensen(individuo, layout_x, layout_y, r0, u0, ct, k):
         for j in range(i): 
             x_j = layout_x[j] 
             y_j = layout_y[j]
-            distancia = np.sqrt((x_i - x_j)**2 + (y_i - y_j)**2)
-            
-            
-            if y_i > y_j:  # Apenas esteira para turbinas a jusante
-                raio_esteira = r0 + k * distancia
-                if abs(x_i - x_j)/2 < raio_esteira:  # Turbina está dentro da esteira
-                    # fator_reducao = ((1 - np.sqrt(1 - ct)) / (1 + k * distancia / r0)**2)   
-                    
-                    # u[i]=u[i-1]*(1-fator_reducao)
-                    # deltinha[i]=1-u[i]/u[0]
                         
-                    soma_quadrados = sum([x**2 for x in deltinha])  # Somatório dos quadrados
-                    deltinha_med = math.sqrt(soma_quadrados)    # deltinha médio
+            if y_i > y_j:  # Apenas esteira para turbinas a jusante
+                raio_esteira = r0 + k * (y_i - y_j)
+                if abs(x_i - x_j)/2 < raio_esteira:  # Turbina está dentro da esteira
+                  
                     if(printAreaSombreada == True): print('Calculo da area sombreada: Turbinas: T', j, ' - T', i)
-                    As=calcula_area_sombreada(x_i, x_j, r0,r0 + k * distancia)
-                    v[i]= u0*(1-(1-np.sqrt(1-ct)) * 4*r0**2 / (np.pi*r0**2) * (area_sombreada / (2*raio_esteira**2)))   ##  Formula da Tese de Jose Ricardo - pag 41
+                    As=calcula_area_sombreada(x_i, x_j, r0,raio_esteira)
+                    
+                    numerador=(1-np.sqrt(1-ct)) * (2*r0)**2 * As
+                    denominador= np.pi*r0**2 * 2 * raio_esteira**2
+                    
+                    v[i]= u0*(1-numerador/denominador)   ##  Formula da Tese de Jose Ricardo - pag 41
                     u[i]=v[i]*As+u0*(1-As)
-                    print(As,u[i])
+                    print("Area: ", As,"V0: ", u[i],"Vento: ", v[i], u0*(1-As))
                     # Ajusta velocidade com base no yaw
                     
         u[i] = u[i]*math.cos(math.radians(individuo[i]))
@@ -338,9 +334,9 @@ cores = ['red', 'blue', 'green']    # Definindo as cores para cada turbina
 
 # Plotar as turbinas
 if(plotarLayout==True):
-    plt.scatter(x, y, color=cores, label='Turbinas')
-    plt.scatter(limitEsquerdoX, y, color=cores)
-    plt.scatter(limitDireitoX, y, color=cores)
+    plt.scatter(x, y, color="blue", label='Turbinas')
+    plt.scatter(limitEsquerdoX, y, color="red", label='Limite pá')
+    plt.scatter(limitDireitoX, y, color="red")
     # Adicionar rótulos ao gráfico
     plt.title('Parque 2D')
     plt.xlabel('Eixo X')
