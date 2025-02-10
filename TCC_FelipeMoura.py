@@ -16,17 +16,18 @@ COUNT = 10              # Número de repetições de gerações consecutivas par
 
 u0=8.0          # Velocidade inicial do vento de 8m/s
 r0=40.0         # Raio da turbina
+D=2*r0
 ct=0.8          # Coeficiente de arrasto
 k=0.075         # Taxa de expansão da esteira (alfa)
 
-layout_x = (0, 20, 40)        # Layout das coordenadas do eixo X
-layout_y = (0, 50, 100)          # Layout das coordenadas do eixo Y
+layout_x = (0, 2, -2)        # Layout das coordenadas do eixo X
+layout_y = (0, 100, 200)          # Layout das coordenadas do eixo Y
 NUM_TURBINAS = len(layout_x)        # Número de turbinas no parque eólico
 
 # True = Sim ---- False = Não
 plotarAreaSombreada = False     # Plotar Area Sombreada
 plotarOtimizacao = True        # Plotar Gráfico da otimização ao longo das gerações
-printAG = True                 # Prints do Algoritmo Genético
+printAG = False                 # Prints do Algoritmo Genético
 plotarLayout = True             # Plotar Layout do parque
 printAreaSombreada = True       # Prints sobre as Áreas Sombreadas das turbinas
 # ==================================================================================================================================
@@ -72,11 +73,8 @@ def calcula_area_sombreada(x_i, x_j, r0, est):
 
 def fitness_jensen(individuo, layout_x, layout_y, r0, u0, ct, k):
     
-    deltinha = np.zeros(NUM_TURBINAS)       # Inicializando o vetor de reduções da velocidade do vento
-    area_sombreada = 0
-    
     u = [u0] * NUM_TURBINAS  # Inicializando velocidades
-    v = [u0] * NUM_TURBINAS  # Inicializando velocidades
+    Ve = [u0] * NUM_TURBINAS  # Inicializando velocidades
     
     for i in range(NUM_TURBINAS):
         x_i = layout_x[i]
@@ -89,22 +87,22 @@ def fitness_jensen(individuo, layout_x, layout_y, r0, u0, ct, k):
                 raio_esteira = r0 + k * (y_i - y_j)
                 if abs(x_i - x_j)/2 < raio_esteira:  # Turbina está dentro da esteira
                   
-                    if(printAreaSombreada == True): print('Calculo da area sombreada: Turbinas: T', j, ' - T', i)
+                    if(printAreaSombreada): print('Calculo da area sombreada: Turbinas: T', j, ' - T', i)
                     As=calcula_area_sombreada(x_i, x_j, r0,raio_esteira)
                     
-                    numerador=(1-np.sqrt(1-ct)) * (2*r0)**2 * As
-                    denominador= np.pi*r0**2 * 2 * raio_esteira**2
+                    #numerador=(1-math.sqrt(1-ct)) * 2*r0**2
+                    #denominador= np.pi*r0**2 * 2 * raio_esteira**2      
+                    #Ve[i]= u0*(1-(numerador/denominador))   
+                               
+                    Ve[i]=u0*(1-(1-(math.sqrt(1-ct)))*(2*r0/(2*raio_esteira))**2)   ##  Formula da Tese de Jose Ricardo - pag 41   
                     
-                    v[i]= u0*(1-numerador/denominador)   ##  Formula da Tese de Jose Ricardo - pag 41
-                    u[i]=v[i]*As+u0*(1-As)
-                    print("Area: ", As,"V0: ", u[i],"Vento: ", v[i], u0*(1-As))
-                    # Ajusta velocidade com base no yaw
+                    u[i]=Ve[i]*As+u0*(1-As) 
+                    if(printAreaSombreada): print("AreaS=", As," V0=",u0, "||||||| Vsomb=", Ve[i]*As, " VNsomb=", u0*(1-As)," ||||||||| U[i]=", u[i])
                     
-        u[i] = u[i]*math.cos(math.radians(individuo[i]))
+                    
+        u[i] = u[i]*math.cos(math.radians(individuo[i]))    # Ajusta velocidade com base no yaw
 
 
-
-    
     
     # Calcula a produção total de energia
     producao = sum(0.5 * 1.225 * math.pi * r0**2 * ui**3 for ui in u)  # Energia proporcional a v^3 sem descontar os ângulos
@@ -236,7 +234,7 @@ def genetic_algorithm():
     # Melhor solução final encontrada
     if(printAG==True):
         print("\nMelhor configuração de ângulos yaw encontrada:", melhor_individuo)
-        print("Aptidão da melhor solução:", melhor_fitness)
+        print(f'Aptidão da melhor solução:, {melhor_fitness:.2f}', "kW")
     
     # Plotando gráfico da otimização
     if(plotarOtimizacao==True):
