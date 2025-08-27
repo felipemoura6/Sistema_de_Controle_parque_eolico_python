@@ -51,7 +51,7 @@ datas_horas = [datetime.strptime(data[i] + " " + h, "%Y/%m/%d %H:%M") for i, h i
 # Parâmetros do algoritmo genético
 
 TAM_POPULACAO = 10      # Quantidade de indivíduos na população
-NUM_GERACAO = 20       # Quantidade de gerações
+NUM_GERACAO = 10       # Quantidade de gerações
 TAXA_MUTACAO = 0.1       # Taxa de mutação
 YAW_MIN = -30             # Ângulo mínimo do yaw
 YAW_MAX = 30              # Ângulo máximo do yaw
@@ -78,19 +78,20 @@ printAreaSombreada = False       # Prints sobre as Áreas Sombreadas das turbina
 
 ## ================================== Subrotina de calculo de produção total do parque =====================================
 
-def calculo_producao_total(num_turbinas, individuo, wind_speeds, wind_directions, fi):
+def calculo_producao_total(num_turbinas, individuo, ws, wd, fi, i):
     global farm_powers
     farm_powers = np.zeros(len(wind_directions))  # Inicializa um array para armazenar as potências
     
     u_points = fi.floris.flow_field.u
     fi.calculate_wake()
     
-    for i, (ws, wd) in enumerate(zip(wind_speeds, wind_directions)):
-        fi.reinitialize(wind_speeds=[ws], wind_directions=[wd])  # Passando a velocidade e direção do vento atual para o FlorisInterface
-        
+            
+
+    fi.reinitialize(wind_speeds=[ws[i]], wind_directions=[wd[i]])  # Passando a velocidade e direção do vento atual para o FlorisInterface
+  
         # Configurando os ângulos de inclinação para todas as turbinas
-        for j in range(len(individuo)):
-            yaw_angles[0,0,j] = individuo[j]
+    for j in range(len(individuo)):
+        yaw_angles[0,0,j] = individuo[j]
             
         fi.calculate_wake(yaw_angles=yaw_angles)
         farm_power = fi.get_farm_power()
@@ -122,6 +123,7 @@ def imprime_resultados(num_turbinas, vet_yaw, wind_speeds, wind_directions, fi, 
     print("")
 
 ## =========================================================================================================================
+
 
 # Inicialização da população
 def populacao_inicial():
@@ -181,81 +183,87 @@ def mutacao(individuo):
 # Algoritmo Genético
 def genetic_algorithm():
 
-    populacao = populacao_inicial()     # Inicializa a população
-    melhor_fitness_anterior = 0
-    count = 0
-    melhor_fitness_historico=[]
-    
-    # Itera por n gerações
-    for geracao in range(NUM_GERACAO):
+    # Itera para cada valor da velocidade do vento lida pelo .csv
+    for i in range(len(wind_speeds)):
+        
+        populacao = populacao_inicial()     # Inicializa a população
+        melhor_fitness_anterior = 0
+        count = 0
+        melhor_fitness_historico=[]
+        
         if(printAG==True):
-            print(f"\nGeração {geracao + 1}:")
-            print("População e Aptidão:")
+            print(f"\n ========  Vento: {wind_speeds[i]}m/s | Direção: {wind_directions[i]}° ======== ")
+        
+        # Itera por n gerações    
+        for geracao in range(NUM_GERACAO):
+            if(printAG==True):
+                print(f"\nGeração {geracao + 1}:")
+                print("População e Aptidão:")
 
-        # Calcula a aptidão de cada indivíduo
-        fitness_scores = [calculo_producao_total(num_turbine, individuo, wind_speeds, wind_directions, fi) for individuo in populacao]
-        
-        # Itera e imprime cada indivíduo com uma numeração e sua aptidão
-        for indice, (individuo, score) in enumerate(zip(populacao, fitness_scores), start=1):
-            angulos_formatados = ", ".join(f"{angulo:.3f}°" for angulo in individuo)
-            if(printAG==True): print(f"Indivíduo {indice}: [{angulos_formatados}], Fitness = {score:.2f} kW")
-        
-        # Encontra o melhor indivíduo da geração
-        melhor_fitness = max(fitness_scores)
-        melhor_individuo = populacao[fitness_scores.index(melhor_fitness)]
-        melhor_fitness_historico.append(melhor_fitness)
-        
-        if(printAG==True): print(f"Melhor aptidão = {melhor_fitness:.2f}, Melhor indivíduo = {melhor_individuo}")
-        
-        # Critério de parada: verifica se a aptidão está saturada
-        if melhor_fitness == melhor_fitness_anterior:
-            count += 1
-        else:
-            count = 0
-        melhor_fitness_anterior = melhor_fitness
+            # Calcula a aptidão de cada indivíduo
+            fitness_scores = [calculo_producao_total(num_turbine, individuo, wind_speeds, wind_directions, fi, i) for individuo in populacao]
+            
+            # Itera e imprime cada indivíduo com uma numeração e sua aptidão
+            for indice, (individuo, score) in enumerate(zip(populacao, fitness_scores), start=1):
+                angulos_formatados = ", ".join(f"{angulo:.3f}°" for angulo in individuo)
+                if(printAG==True): print(f"Indivíduo {indice}: [{angulos_formatados}], Fitness = {score:.2f} kW")
+            
+            # Encontra o melhor indivíduo da geração
+            melhor_fitness = max(fitness_scores)
+            melhor_individuo = populacao[fitness_scores.index(melhor_fitness)]
+            melhor_fitness_historico.append(melhor_fitness)
+            
+            if(printAG==True): print(f"Melhor aptidão = {melhor_fitness:.2f}, Melhor indivíduo = {melhor_individuo}")
+            
+            # Critério de parada: verifica se a aptidão está saturada
+            if melhor_fitness == melhor_fitness_anterior:
+                count += 1
+            else:
+                count = 0
+            melhor_fitness_anterior = melhor_fitness
 
-        # Se a aptidão não alterar por COUNT gerações consecutivas
-        if count >= COUNT:
-            print(f"\nCritério de parada alcançado: Melhor aptidão não melhorou por {COUNT} gerações consecutivas.")
-            break
-        
-        # Nova população
-        nova_populacao = []
-        
-        # Mantém o melhor indivíduo (elitismo)
-        nova_populacao.append(melhor_individuo)
-        
-        # Gera novos indivíduos
-        while len(nova_populacao) < TAM_POPULACAO:
-            # Seleciona dois pais
-            pai1 = selecao(populacao, fitness_scores)
-            pai2 = selecao(populacao, fitness_scores)
+            # Se a aptidão não alterar por COUNT gerações consecutivas
+            if count >= COUNT:
+                print(f"\nCritério de parada alcançado: Melhor aptidão não melhorou por {COUNT} gerações consecutivas.")
+                break
             
-            # Realiza o cruzamento
-            filho = crossover(pai1, pai2)
+            # Nova população
+            nova_populacao = []
             
-            # Aplica a mutação
-            filho = mutacao(filho)
+            # Mantém o melhor indivíduo (elitismo)
+            nova_populacao.append(melhor_individuo)
             
-            # Adiciona o novo indivíduo à nova população
-            nova_populacao.append(filho)
+            # Gera novos indivíduos
+            while len(nova_populacao) < TAM_POPULACAO:
+                # Seleciona dois pais
+                pai1 = selecao(populacao, fitness_scores)
+                pai2 = selecao(populacao, fitness_scores)
+                
+                # Realiza o cruzamento
+                filho = crossover(pai1, pai2)
+                
+                # Aplica a mutação
+                filho = mutacao(filho)
+                
+                # Adiciona o novo indivíduo à nova população
+                nova_populacao.append(filho)
+            
+            # Substitui a população antiga pela nova
+            populacao = nova_populacao
         
-        # Substitui a população antiga pela nova
-        populacao = nova_populacao
-    
-    # Melhor solução final encontrada
-    if(printAG==True):
-        print("\nMelhor configuração de ângulos yaw encontrada:", melhor_individuo)
-        print(f'Aptidão da melhor solução:, {melhor_fitness:.2f}', "kW")
-    
-    # Plotando gráfico da otimização
-    if(plotarOtimizacao==True):
-        plt.plot(melhor_fitness_historico, marker='o', linestyle='-', color='b')
-        plt.xlabel(f'Valor Final = {max(melhor_fitness_historico):.2f} kW') # Colocando o maior valor otimizado
-        plt.ylabel('Melhor Aptidão (kW)')
-        plt.title('Evolução da Aptidão ao Longo das Gerações')
-        plt.grid(True)
-        plt.show()
+        # Melhor solução final encontrada
+        if(printAG==True):
+            print("\nMelhor configuração de ângulos yaw encontrada:", melhor_individuo)
+            print(f'Aptidão da melhor solução:, {melhor_fitness:.2f}', "kW")
+        
+        # Plotando gráfico da otimização
+        if(plotarOtimizacao==True):
+            plt.plot(melhor_fitness_historico, marker='o', linestyle='-', color='b')
+            plt.xlabel(f'Valor Final = {max(melhor_fitness_historico):.2f} kW') # Colocando o maior valor otimizado
+            plt.ylabel('Melhor Aptidão (kW)')
+            plt.title('Evolução da Aptidão ao Longo das Gerações')
+            plt.grid(True)
+            plt.show()
 
 # Executa o algoritmo genético
 print('==================================================')
