@@ -49,8 +49,8 @@ datas_horas = [datetime.strptime(data[i] + " " + h, "%Y/%m/%d %H:%M") for i, h i
 # ==================================================================================================================================
 # Parâmetros do algoritmo genético
 
-TAM_POPULACAO = 5      # Quantidade de indivíduos na população
-NUM_GERACAO = 1       # Quantidade de gerações
+TAM_POPULACAO = 20      # Quantidade de indivíduos na população
+NUM_GERACAO = 10       # Quantidade de gerações
 TAXA_MUTACAO = 0.1       # Taxa de mutação
 YAW_MIN = -30             # Ângulo mínimo do yaw
 YAW_MAX = 30              # Ângulo máximo do yaw
@@ -67,16 +67,37 @@ layout_y=[50., 220., 440., 50., 220., 440., 50., 220., 440.]          # Layout d
         
 NUM_TURBINAS = len(layout_x)        # Número de turbinas no parque eólico
 farm_powers = np.zeros(len(wind_directions))  # Inicializa um array para armazenar as potências
-
+historico_powers = np.zeros((NUM_GERACAO+1, len(wind_directions)))
 
 # True = Sim ---- False = Não
-plotarWake = True              # Plotar Efeito de Esteira
+plotarWake = False              # Plotar Efeito de Esteira
 plotarOtimizacao = True        # Plotar Gráfico da otimização ao longo das gerações
 printAG = True                 # Prints do Algoritmo Genético
-plotarLayout = True             # Plotar Layout do parque
+plotarLayout = False            # Plotar Layout do parque
+plotarPotencia = True          # Plotar Histórico de Potência
 # ==================================================================================================================================
 
 ## ================================== Subrotina de calculo de produção total do parque =====================================
+
+def calculo_producao_sem_otimizacao(ws, wd, fi, i):
+    vetor_zerado = np.zeros(NUM_TURBINAS)
+
+    u_points = fi.floris.flow_field.u
+    fi.calculate_wake()
+    
+            
+
+    fi.reinitialize(wind_speeds=[ws[i]], wind_directions=[wd[i]])  # Passando a velocidade e direção do vento atual para o FlorisInterface
+  
+        # Configurando os ângulos de inclinação para todas as turbinas
+    for j in range(len(vetor_zerado)):
+        yaw_angles[0,0,j] = vetor_zerado[j]
+            
+        fi.calculate_wake(yaw_angles=yaw_angles)
+        farm_power = fi.get_farm_power()
+    producao_total = np.sum(farm_power/1e3)
+    return producao_total
+
 
 def calculo_producao_total(num_turbinas, individuo, ws, wd, fi, i):
 
@@ -195,7 +216,12 @@ def mutacao(individuo):
 
 # Algoritmo Genético
 def genetic_algorithm():
-
+    
+    # Itera para calculo de potência com todos ângulos zerados e armazena na primeira posição do vetor de potência
+    for i in range(len(wind_speeds)):
+        historico_powers[0,i]=calculo_producao_sem_otimizacao(wind_speeds,wind_directions,fi,i)
+        
+        
     # Itera para cada valor da velocidade do vento lida pelo .csv
     for i in range(len(wind_speeds)):
         
@@ -224,6 +250,7 @@ def genetic_algorithm():
             # Encontra o melhor indivíduo da geração
             melhor_fitness = max(fitness_scores)
             farm_powers[i] = np.squeeze(melhor_fitness)   # Convertendo para kW e salvando o valor na posição atual de farm_powers
+            historico_powers[geracao+1,i]=melhor_fitness
             melhor_individuo = populacao[fitness_scores.index(melhor_fitness)]
             melhor_fitness_historico.append(melhor_fitness)
             
@@ -264,7 +291,7 @@ def genetic_algorithm():
             
             # Substitui a população antiga pela nova
             populacao = nova_populacao
-            print(melhor_individuo)
+            #print(melhor_individuo)
         # Melhor solução final encontrada
         if(printAG==True):
             print("\nMelhor configuração de ângulos yaw encontrada:", melhor_individuo)
@@ -301,9 +328,9 @@ yaw_angles = np.zeros((1, 1, num_turbine))
 melhor_yaw_historico = np.zeros((1, len(wind_speeds), num_turbine))
 genetic_algorithm() 
 
-imprime_resultados(num_turbine, melhor_yaw_historico, wind_speeds, wind_directions, fi, farm_powers)
-
-
+imprime_resultados(num_turbine, melhor_yaw_historico, wind_speeds, wind_directions, fi, historico_powers)
+print(f"\nIMPRIMIR POTÊNCIA FINAL E INICIAL PARA VER O GANHO")
+print(f"\nTESTAR BIBLIOTECA DO ALGORITMO GENETICO")
 
 # Definir as coordenadas dos pontos
 x = layout_x  # Coordenadas x dos pontos
@@ -315,7 +342,7 @@ limitDireitoX = np.array(layout_x) + r0     # Posição do limite direito das tu
 cores = ['red', 'blue', 'green']    # Definindo as cores para cada turbina
 
 # Plotar as turbinas
-if(plotarLayout==True):
+if(plotarLayout):
     plt.scatter(x, y, color="blue", label='Turbinas')
     plt.scatter(limitEsquerdoX, y, color="red", label='Limite pá')
     plt.scatter(limitDireitoX, y, color="red")
@@ -365,6 +392,22 @@ if(plotarWake):
         fig.suptitle(title, fontsize=14, weight="bold")
 
         plt.tight_layout(rect=[0, 0, 1, 0.96])  # evita sobreposição do título
+        
+if(plotarPotencia):
+    linhas, colunas = historico_powers.shape
+    x = np.arange(linhas)  # eixo x = índice da linha
+
+    plt.figure(figsize=(10,6))
+
+    # Plota cada coluna como uma curva
+    for j in range(colunas):
+        plt.plot(x, historico_powers[:, j], marker='o', label=f'Vento: {wind_speeds[j]}m/s - {wind_directions[j]}°')
+
+    plt.xlabel("Geração")
+    plt.ylabel("Potência")
+    plt.title("Curvas de potência")
+    plt.legend("Potência x Geração")
+
 
     
 # Exibir o gráfico
