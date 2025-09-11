@@ -49,8 +49,8 @@ datas_horas = [datetime.strptime(data[i] + " " + h, "%Y/%m/%d %H:%M") for i, h i
 # ==================================================================================================================================
 # Parâmetros do algoritmo genético
 
-TAM_POPULACAO = 20      # Quantidade de indivíduos na população
-NUM_GERACAO = 10       # Quantidade de gerações
+TAM_POPULACAO = 100      # Quantidade de indivíduos na população
+NUM_GERACAO = 20       # Quantidade de gerações
 TAXA_MUTACAO = 0.1       # Taxa de mutação
 YAW_MIN = -30             # Ângulo mínimo do yaw
 YAW_MAX = 30              # Ângulo máximo do yaw
@@ -60,8 +60,8 @@ r0=40.0         # Raio da turbina
 D=2*r0
 
 
-layout_x=[0, 0, 0, 500, 500, 500, 1000, 1000, 1000]        # Layout das coordenadas do eixo X
-layout_y=[50., 220., 440., 50., 220., 440., 50., 220., 440.]          # Layout das coordenadas do eixo Y
+layout_x=[0, 0, 0, 500, 500, 500, 1000, 1000, 1000, 250, 250, 450]        # Layout das coordenadas do eixo X
+layout_y=[50., 220., 440., 50., 220., 440., 50., 220., 440., 500, 650, 500]          # Layout das coordenadas do eixo Y
 
 
         
@@ -131,6 +131,7 @@ def imprime_resultados(num_turbinas, vet_yaw, wind_speeds, wind_directions, fi, 
     cabeçalho = "| {:<19} | {:<18} |".format("DATA - HORA", "VENTO")
     for i in range(1, len(turbine_name) + 1):  # Para cada turbina
         cabeçalho += " {:<7} |".format(f"T{i}")
+    cabeçalho += " {:<7} |".format("Ganho (%)")
     print(cabeçalho)
 
     # Linha de separação para visualização
@@ -146,11 +147,15 @@ def imprime_resultados(num_turbinas, vet_yaw, wind_speeds, wind_directions, fi, 
         if i < len(vet_yaw[0]):
             for yaw in vet_yaw[0, i, :]:  # vet_yaw[0, i, :] acessa os parâmetros da turbina i
                 row += " {:<6.2f}° |".format(yaw)  # Formata cada valor individualmente
+            ganho = (potencia_parque[-1, i] / potencia_parque[0, i]-1)*100
+            row += " + {:<6.2f}% |".format(ganho)
         else:
             # Caso vet_yaw não tenha elementos suficientes para o índice i, avise ou defina um valor padrão
             row += " {:<6} |".format("N/A")  # Indica que não há valor para essa turbina
         
         print(row)
+        
+
 
     # Linha de separação após os dados
     print("=" * len(cabeçalho))
@@ -178,7 +183,7 @@ def selecao(populacao, fitness_scores):
     Seleciona dois pais da população via seleção por torneio.
     """
     # Escolha de dois indivíduos aleatoriamente e selecionando o melhor
-    tamanho_selecao = 3
+    tamanho_selecao = 10
     selected = random.sample(range(TAM_POPULACAO), tamanho_selecao)
     melhor_individual = max(selected, key=lambda x: fitness_scores[x])
     return populacao[melhor_individual]
@@ -220,7 +225,7 @@ def genetic_algorithm():
     # Itera para calculo de potência com todos ângulos zerados e armazena na primeira posição do vetor de potência
     for i in range(len(wind_speeds)):
         historico_powers[0,i]=calculo_producao_sem_otimizacao(wind_speeds,wind_directions,fi,i)
-        
+        #print(calculo_producao_sem_otimizacao(wind_speeds,wind_directions,fi,i))
         
     # Itera para cada valor da velocidade do vento lida pelo .csv
     for i in range(len(wind_speeds)):
@@ -254,7 +259,9 @@ def genetic_algorithm():
             melhor_individuo = populacao[fitness_scores.index(melhor_fitness)]
             melhor_fitness_historico.append(melhor_fitness)
             
-            if(printAG): print(f"Melhor aptidão = {melhor_fitness:.2f}, Melhor indivíduo = {melhor_individuo}")
+            if(printAG):
+                individuo_formatado = ", ".join(f"{angulos:.3f}" for angulos in melhor_individuo)
+                print("Melhor aptidão = {:.2f}, Melhor indivíduo = [{}]".format(melhor_fitness, individuo_formatado))
             
             # Critério de parada: verifica se a aptidão está saturada
             if melhor_fitness == melhor_fitness_anterior:
@@ -294,7 +301,7 @@ def genetic_algorithm():
             #print(melhor_individuo)
         # Melhor solução final encontrada
         if(printAG==True):
-            print("\nMelhor configuração de ângulos yaw encontrada:", melhor_individuo)
+            print("\nMelhor configuração de ângulos yaw encontrada:", individuo_formatado)
             print(f'Aptidão da melhor solução:, {melhor_fitness:.2f}', "kW")
             melhor_yaw_historico[0,i,:] = melhor_individuo
         
@@ -313,7 +320,7 @@ print('=' * 100)
 
 ## ============================================ PARÂMETROS DE SIMULAÇÃO ===========================================
 
-fi.reinitialize(layout_x=[0, 0, 0, 500, 500, 500, 1000, 1000, 1000], layout_y=[50., 220., 440., 50., 220., 440., 50., 220., 440.])  # Layout do parque
+fi.reinitialize(layout_x=layout_x, layout_y=layout_y)  # Layout do parque
 turbine_name = []  # Lista para armazenar os nomes das turbinas
 
 for i in range(len(fi.layout_x)):       # Laço para nomear as turbinas no formato 'T01' usando o length do layout
@@ -406,7 +413,7 @@ if(plotarPotencia):
     plt.xlabel("Geração")
     plt.ylabel("Potência")
     plt.title("Curvas de potência")
-    plt.legend("Potência x Geração")
+    plt.legend()
 
 
     
